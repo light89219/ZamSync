@@ -12,7 +12,7 @@ impl<S: StateStore> ZamEngine<S> {
     /// Initialise the engine. 
     /// If the WAL already exists, it will be scanned to recover the current state.
     pub fn open(path: impl AsRef<Path>, mut state: S) -> ZamResult<Self> {
-        let (last_seq, recover_pos) = WalScanner::recover(&path)?;
+        let (last_seq, _recover_pos) = WalScanner::recover(&path)?;
         
         // If there is data to recover, replay it into the state projection
         if let Some(_) = last_seq {

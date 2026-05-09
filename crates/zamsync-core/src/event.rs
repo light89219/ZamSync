@@ -1,5 +1,4 @@
 use rkyv::{Archive, Deserialize, Serialize};
-use bytecheck::CheckBytes;
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]
 #[archive(check_bytes)]

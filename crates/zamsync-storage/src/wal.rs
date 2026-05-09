@@ -89,6 +89,9 @@ impl WalScanner {
 
     /// Returns the last valid sequence number and the position after it.
     pub fn recover(path: impl AsRef<Path>) -> ZamResult<(Option<SequenceNumber>, u64)> {
+        if !path.as_ref().exists() {
+            return Ok((None, 0));
+        }
         let scanner = WalScanner::open(&path)?;
         let mut it = scanner.scan();
         let mut last_seq = None;
