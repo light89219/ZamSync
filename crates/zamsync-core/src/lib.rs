@@ -9,12 +9,14 @@ pub mod sync;
 pub use sync::*;
 
 /// Unique identifier for a node in the ZamSync network.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[archive(check_bytes)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NodeId(pub u32);
 
 /// Monotonically increasing sequence number for events.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[archive(check_bytes)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SequenceNumber(pub u64);
 
@@ -37,6 +39,12 @@ impl fmt::Display for SequenceNumber {
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]
 #[archive(check_bytes)]
 pub struct Event {
+    /// Identity of the node that created this event.
+    pub origin_node: NodeId,
+    /// Monotonic sequence number from the origin node.
+    pub seq: SequenceNumber,
+    /// Unix timestamp in microseconds (approximate physical time).
+    pub timestamp: u64,
     /// Application-defined type or namespace.
     pub event_type: u32,
     /// Opaque binary data.
