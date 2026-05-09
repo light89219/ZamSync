@@ -23,7 +23,7 @@ impl<S: StateStore> ZamEngine<S> {
                 let event: Event = rkyv::from_bytes(&record.payload)
                     .map_err(|e| ZamError::Serialization(format!("Failed to deserialize event: {}", e)))?;
                 
-                state.apply_event(record.seq, &event);
+                state.apply_event(record.seq, &event)?;
             }
         }
 
@@ -44,7 +44,7 @@ impl<S: StateStore> ZamEngine<S> {
         let seq = self.writer.append(&bytes)?;
         
         // 3. Apply to state (Projection)
-        self.state.apply_event(seq, &event);
+        self.state.apply_event(seq, &event)?;
         
         Ok(seq)
     }
