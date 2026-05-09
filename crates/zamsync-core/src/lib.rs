@@ -1,6 +1,49 @@
 use std::fmt;
 use rkyv::{Archive, Deserialize, Serialize};
 
+/// Hybrid Logical Clock (HLC) for causal ordering.
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[archive(check_bytes)]
+pub struct Hlc {
+    /// Physical time (e.g., milliseconds since epoch).
+    pub physical: u64,
+    /// Logical counter for events within the same physical tick.
+    pub logical: u32,
+}
+
+impl Hlc {
+    pub fn new(physical: u64, logical: u32) -> Self {
+        Self { physical, logical }
+    }
+
+    /// Update HLC with local physical time.
+    pub fn tick(&mut self, now_ms: u64) {
+        if now_ms > self.physical {
+            self.physical = now_ms;
+            self.logical = 0;
+        } else {
+            self.logical += 1;
+        }
+    }
+
+    /// Sync HLC with a remote timestamp.
+    pub fn sync(&mut self, now_ms: u64, remote: &Hlc) {
+        let max_phys = now_ms.max(self.physical).max(remote.physical);
+        
+        if max_phys == self.physical && max_phys == remote.physical {
+            self.logical = self.logical.max(remote.logical) + 1;
+        } else if max_phys == self.physical {
+            self.logical += 1;
+        } else if max_phys == remote.physical {
+            self.physical = remote.physical;
+            self.logical = remote.logical + 1;
+        } else {
+            self.physical = max_phys;
+            self.logical = 0;
+        }
+    }
+}
+
 /// Magic number for ZamSync WAL files: "ZAM!" in ASCII
 pub const WAL_MAGIC: [u8; 4] = [0x5A, 0x41, 0x4D, 0x21];
 pub const WAL_VERSION: u8 = 1;
@@ -43,8 +86,8 @@ pub struct Event {
     pub origin_node: NodeId,
     /// Monotonic sequence number from the origin node.
     pub seq: SequenceNumber,
-    /// Unix timestamp in microseconds (approximate physical time).
-    pub timestamp: u64,
+    /// Hybrid Logical Clock timestamp for total ordering.
+    pub hlc: Hlc,
     /// Application-defined type or namespace.
     pub event_type: u32,
     /// Opaque binary data.

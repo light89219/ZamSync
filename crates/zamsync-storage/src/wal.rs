@@ -34,6 +34,10 @@ impl WalWriter {
         })
     }
 
+    pub fn next_seq(&self) -> SequenceNumber {
+        self.current_seq
+    }
+
     pub fn append(&mut self, payload: &[u8]) -> ZamResult<SequenceNumber> {
         let seq = self.current_seq;
         let len = payload.len() as u32;

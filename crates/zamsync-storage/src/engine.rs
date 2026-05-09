@@ -1,28 +1,32 @@
 use std::path::Path;
-use zamsync_core::{Event, SequenceNumber, ZamResult, ZamError};
+use std::time::{SystemTime, UNIX_EPOCH};
+use zamsync_core::{Event, SequenceNumber, NodeId, Hlc, ZamResult, ZamError};
 use crate::wal::{WalWriter, WalScanner};
 use crate::state::StateStore;
 
 pub struct ZamEngine<S: StateStore> {
+    node_id: NodeId,
     writer: WalWriter,
     state: S,
+    hlc: Hlc,
 }
 
 impl<S: StateStore> ZamEngine<S> {
-    /// Initialise the engine. 
-    /// If the WAL already exists, it will be scanned to recover the current state.
-    pub fn open(path: impl AsRef<Path>, mut state: S) -> ZamResult<Self> {
+    /// Initialise the engine with a specific node identity.
+    pub fn open(path: impl AsRef<Path>, node_id: NodeId, mut state: S) -> ZamResult<Self> {
         let (last_seq, _recover_pos) = WalScanner::recover(&path)?;
+        let mut max_hlc = Hlc::default();
         
-        // If there is data to recover, replay it into the state projection
         if let Some(_) = last_seq {
             let scanner = WalScanner::open(&path)?;
             let mut it = scanner.scan();
             while let Some(record) = it.next_record()? {
-                // Deserialize event using rkyv
                 let event: Event = rkyv::from_bytes(&record.payload)
                     .map_err(|e| ZamError::Serialization(format!("Failed to deserialize event: {}", e)))?;
                 
+                if event.hlc > max_hlc {
+                    max_hlc = event.hlc;
+                }
                 state.apply_event(record.seq, &event)?;
             }
         }
@@ -30,20 +34,50 @@ impl<S: StateStore> ZamEngine<S> {
         let next_seq = last_seq.map(|s| s.next()).unwrap_or(SequenceNumber::ZERO);
         let writer = WalWriter::open(path, next_seq)?;
 
-        Ok(Self { writer, state })
+        Ok(Self { 
+            node_id, 
+            writer, 
+            state,
+            hlc: max_hlc,
+        })
     }
 
-    /// Submit a new event to the system.
-    /// Returns the sequence number assigned to the event.
-    pub fn submit(&mut self, event: Event) -> ZamResult<SequenceNumber> {
-        // 1. Serialize
+    /// Submit a locally created event.
+    pub fn submit(&mut self, event_type: u32, payload: Vec<u8>) -> ZamResult<SequenceNumber> {
+        let next_seq = self.writer.next_seq();
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        
+        self.hlc.tick(now_ms);
+        let event = Event {
+            origin_node: self.node_id,
+            seq: next_seq,
+            hlc: self.hlc,
+            event_type,
+            payload,
+        };
+
+        self.apply_to_log(event)
+    }
+
+    /// Apply an event received from a peer.
+    pub fn apply_replicated(&mut self, event: Event) -> ZamResult<SequenceNumber> {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        
+        self.hlc.sync(now_ms, &event.hlc);
+        self.apply_to_log(event)
+    }
+
+    fn apply_to_log(&mut self, event: Event) -> ZamResult<SequenceNumber> {
         let bytes = rkyv::to_bytes::<_, 1024>(&event)
             .map_err(|e| ZamError::Serialization(format!("Failed to serialize event: {}", e)))?;
         
-        // 2. Append to WAL (Persistence)
         let seq = self.writer.append(&bytes)?;
-        
-        // 3. Apply to state (Projection)
         self.state.apply_event(seq, &event)?;
         
         Ok(seq)
@@ -51,6 +85,10 @@ impl<S: StateStore> ZamEngine<S> {
 
     pub fn state(&self) -> &S {
         &self.state
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
     }
 
     pub fn sync(&mut self) -> ZamResult<()> {
