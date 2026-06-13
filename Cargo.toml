@@ -25,8 +25,10 @@ description = "Resilient Offline-First Synchronization Engine"
 
 [dependencies]
 zamsync-storage = { path = "crates/zamsync-storage" }
+zamsync-network = { path = "crates/zamsync-network" }
 zamsync-core = { path = "crates/zamsync-core" }
 log.workspace = true
+env_logger = "0.11"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
