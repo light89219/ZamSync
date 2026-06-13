@@ -1,8 +1,8 @@
+use crate::adapters::{FilePeerStore, WalEventStore};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zamsync_core::{Event, Hlc, NodeId, ReplicationState, SequenceNumber, ZamResult};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
-use crate::adapters::{FilePeerStore, WalEventStore};
+use zamsync_core::{Event, Hlc, NodeId, ReplicationState, SequenceNumber, ZamResult};
 
 pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
     node_id: NodeId,
@@ -14,12 +14,7 @@ pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
 }
 
 impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
-    pub fn new(
-        node_id: NodeId,
-        event_store: E,
-        peer_store: P,
-        mut state: S,
-    ) -> ZamResult<Self> {
+    pub fn new(node_id: NodeId, event_store: E, peer_store: P, mut state: S) -> ZamResult<Self> {
         let mut max_hlc = Hlc::default();
 
         for event_res in event_store.scan()? {
@@ -86,17 +81,15 @@ impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
     fn commit_event(&mut self, event: Event) -> ZamResult<SequenceNumber> {
         let local_seq = self.event_store.append(&event)?;
         self.state.apply_event(local_seq, &event)?;
-        self.replication.local_vv.update(event.origin_node, event.seq);
+        self.replication
+            .local_vv
+            .update(event.origin_node, event.seq);
         Ok(local_seq)
     }
 }
 
 impl<S: StateStore> ZamEngine<WalEventStore, FilePeerStore, S> {
-    pub fn open_wal(
-        data_dir: impl AsRef<Path>,
-        node_id: NodeId,
-        state: S,
-    ) -> ZamResult<Self> {
+    pub fn open_wal(data_dir: impl AsRef<Path>, node_id: NodeId, state: S) -> ZamResult<Self> {
         let dir = data_dir.as_ref();
         let event_store = WalEventStore::open(dir.join("events.wal"))?;
         let peer_store = FilePeerStore::open(dir.join("peers.state"), node_id)?;

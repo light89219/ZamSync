@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use zamsync_core::{NodeId, SyncMessage, ZamResult};
 use zamsync_core::ports::Transport;
+use zamsync_core::{NodeId, SyncMessage, ZamResult};
 
 pub struct MockTransport {
     outbox: Vec<(NodeId, SyncMessage)>,

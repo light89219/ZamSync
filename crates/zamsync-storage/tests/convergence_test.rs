@@ -1,8 +1,8 @@
-use zamsync_core::{Event, NodeId, SequenceNumber, ZamResult};
-use zamsync_core::ports::StateStore;
-use zamsync_storage::{FilePeerStore, LogSorter, WalEventStore, ZamEngine};
-use tempfile::tempdir;
 use std::collections::HashMap;
+use tempfile::tempdir;
+use zamsync_core::ports::StateStore;
+use zamsync_core::{Event, NodeId, SequenceNumber, ZamResult};
+use zamsync_storage::{FilePeerStore, LogSorter, WalEventStore, ZamEngine};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct KVState {
@@ -13,7 +13,8 @@ struct KVState {
 impl StateStore for KVState {
     fn apply_event(&mut self, _seq: SequenceNumber, event: &Event) -> ZamResult<()> {
         let val = String::from_utf8_lossy(&event.payload).to_string();
-        self.data.insert(format!("node_{}", event.origin_node.0), val.clone());
+        self.data
+            .insert(format!("node_{}", event.origin_node.0), val.clone());
         self.history.push(val);
         Ok(())
     }
@@ -65,8 +66,14 @@ fn test_split_brain_convergence() -> Result<(), Box<dyn std::error::Error>> {
         final_state_b.apply_event(SequenceNumber(i as u64), &event_res?)?;
     }
 
-    assert_eq!(final_state_a.history, final_state_b.history, "convergence path diverged");
-    assert_eq!(final_state_a, final_state_b, "final states are not identical");
+    assert_eq!(
+        final_state_a.history, final_state_b.history,
+        "convergence path diverged"
+    );
+    assert_eq!(
+        final_state_a, final_state_b,
+        "final states are not identical"
+    );
 
     Ok(())
 }

@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use zamsync_core::{Event, SequenceNumber, ZamError, ZamResult};
-use zamsync_core::ports::EventStore;
 use crate::wal::{WalScanner, WalWriter};
+use std::path::{Path, PathBuf};
+use zamsync_core::ports::EventStore;
+use zamsync_core::{Event, SequenceNumber, ZamError, ZamResult};
 
 pub struct WalEventStore {
     path: PathBuf,
@@ -26,8 +26,8 @@ impl EventStore for WalEventStore {
     }
 
     fn append(&mut self, event: &Event) -> ZamResult<SequenceNumber> {
-        let bytes = rkyv::to_bytes::<_, 1024>(event)
-            .map_err(|e| ZamError::Serialization(e.to_string()))?;
+        let bytes =
+            rkyv::to_bytes::<_, 1024>(event).map_err(|e| ZamError::Serialization(e.to_string()))?;
         self.writer.append(&bytes)
     }
 

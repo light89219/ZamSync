@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use zamsync_core::{Event, SequenceNumber, ZamResult};
 use zamsync_core::ports::EventStore;
+use zamsync_core::{Event, SequenceNumber, ZamResult};
 
 #[derive(Default, Clone)]
 pub struct InMemoryEventStore {

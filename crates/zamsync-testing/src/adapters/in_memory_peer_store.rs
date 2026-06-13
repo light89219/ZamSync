@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use zamsync_core::{NodeId, ReplicationState, VersionVector, ZamResult};
 use zamsync_core::ports::PeerStore;
+use zamsync_core::{NodeId, ReplicationState, VersionVector, ZamResult};
 
 pub struct InMemoryPeerStore {
     state: ReplicationState,

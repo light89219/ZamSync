@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use rkyv::{Archive, Deserialize, Serialize};
 use crate::{Event, NodeId, SequenceNumber};
+use rkyv::{Archive, Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq)]
 #[archive(check_bytes)]
@@ -14,14 +14,20 @@ impl VersionVector {
     }
 
     pub fn update(&mut self, node_id: NodeId, seq: SequenceNumber) {
-        let entry = self.entries.entry(node_id.0).or_insert(SequenceNumber::ZERO);
+        let entry = self
+            .entries
+            .entry(node_id.0)
+            .or_insert(SequenceNumber::ZERO);
         if seq > *entry {
             *entry = seq;
         }
     }
 
     pub fn get(&self, node_id: NodeId) -> SequenceNumber {
-        self.entries.get(&node_id.0).cloned().unwrap_or(SequenceNumber::ZERO)
+        self.entries
+            .get(&node_id.0)
+            .cloned()
+            .unwrap_or(SequenceNumber::ZERO)
     }
 
     pub fn find_gaps(&self, other: &VersionVector) -> Vec<(NodeId, SequenceNumber)> {

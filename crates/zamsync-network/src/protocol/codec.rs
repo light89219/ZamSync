@@ -1,17 +1,16 @@
+use super::frame;
 use std::io::{Read, Write};
 use zamsync_core::{SyncMessage, ZamError, ZamResult};
-use super::frame;
 
 pub fn encode(msg: &SyncMessage, writer: &mut impl Write) -> ZamResult<()> {
-    let bytes = rkyv::to_bytes::<_, 1024>(msg)
-        .map_err(|e| ZamError::Serialization(e.to_string()))?;
+    let bytes =
+        rkyv::to_bytes::<_, 1024>(msg).map_err(|e| ZamError::Serialization(e.to_string()))?;
     frame::write_frame(writer, &bytes)
 }
 
 pub fn decode(reader: &mut impl Read) -> ZamResult<SyncMessage> {
     let bytes = frame::read_frame(reader)?;
-    rkyv::from_bytes::<SyncMessage>(&bytes)
-        .map_err(|e| ZamError::Serialization(format!("{}", e)))
+    rkyv::from_bytes::<SyncMessage>(&bytes).map_err(|e| ZamError::Serialization(format!("{}", e)))
 }
 
 #[cfg(test)]
@@ -55,7 +54,11 @@ mod tests {
         let decoded = decode(&mut cursor).unwrap();
 
         match decoded {
-            SyncMessage::PullRequest { origin_node, start_seq, limit } => {
+            SyncMessage::PullRequest {
+                origin_node,
+                start_seq,
+                limit,
+            } => {
                 assert_eq!(origin_node.0, 1);
                 assert_eq!(start_seq.0, 100);
                 assert_eq!(limit, 50);
@@ -86,7 +89,10 @@ mod tests {
         let decoded = decode(&mut cursor).unwrap();
 
         match decoded {
-            SyncMessage::EventBatch { origin_node, events } => {
+            SyncMessage::EventBatch {
+                origin_node,
+                events,
+            } => {
                 assert_eq!(origin_node.0, 3);
                 assert_eq!(events.len(), 1);
                 assert_eq!(events[0].payload, b"payload");

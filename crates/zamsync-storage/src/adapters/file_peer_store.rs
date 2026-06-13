@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use zamsync_core::{NodeId, ReplicationState, VersionVector, ZamError, ZamResult};
 use zamsync_core::ports::PeerStore;
+use zamsync_core::{NodeId, ReplicationState, VersionVector, ZamError, ZamResult};
 
 pub struct FilePeerStore {
     path: PathBuf,
@@ -36,8 +36,8 @@ impl PeerStore for FilePeerStore {
     }
 
     fn save(&mut self, state: &ReplicationState) -> ZamResult<()> {
-        let bytes = rkyv::to_bytes::<_, 1024>(state)
-            .map_err(|e| ZamError::Serialization(e.to_string()))?;
+        let bytes =
+            rkyv::to_bytes::<_, 1024>(state).map_err(|e| ZamError::Serialization(e.to_string()))?;
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)

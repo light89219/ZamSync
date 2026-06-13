@@ -1,7 +1,7 @@
-use zamsync_core::{NodeId, SequenceNumber, VersionVector};
-use zamsync_core::ports::PeerStore;
-use zamsync_storage::FilePeerStore;
 use tempfile::tempdir;
+use zamsync_core::ports::PeerStore;
+use zamsync_core::{NodeId, SequenceNumber, VersionVector};
+use zamsync_storage::FilePeerStore;
 
 #[test]
 fn test_version_vector_persistence() -> Result<(), Box<dyn std::error::Error>> {

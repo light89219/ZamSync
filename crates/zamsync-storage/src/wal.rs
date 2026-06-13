@@ -1,9 +1,9 @@
-use std::fs::{File, OpenOptions};
-use std::io::{self, Write, Read, Seek, SeekFrom, BufWriter};
-use std::path::Path;
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crc32fast::Hasher;
-use zamsync_core::{SequenceNumber, ZamResult, ZamError, WAL_MAGIC, WAL_VERSION};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::Path;
+use zamsync_core::{SequenceNumber, ZamError, ZamResult, WAL_MAGIC, WAL_VERSION};
 
 /// WAL Header Size: 4 (Magic) + 1 (Ver) + 4 (CRC) + 8 (Seq) + 4 (Len) = 21 bytes.
 pub const WAL_HEADER_SIZE: usize = 21;
@@ -23,11 +23,8 @@ impl WalWriter {
     /// Opens or creates a WAL file.
     /// If it exists, it MUST be validated first to ensure no partial records at the end.
     pub fn open(path: impl AsRef<Path>, start_seq: SequenceNumber) -> ZamResult<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-        
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+
         Ok(Self {
             file: BufWriter::new(file),
             current_seq: start_seq,
@@ -129,27 +126,30 @@ impl Iterator for WalIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.file.seek(SeekFrom::Start(self.offset)).ok()?;
-        
+
         let mut header = [0u8; WAL_HEADER_SIZE];
         let bytes_read = self.file.read(&mut header).ok()?;
-        
+
         if bytes_read == 0 {
             return None;
         }
-        
+
         if bytes_read < WAL_HEADER_SIZE {
             return Some(Err(ZamError::Corruption("Partial header at EOF".into())));
         }
 
         let mut rdr = io::Cursor::new(&header);
-        
+
         // 1. Verify Magic
         let mut magic = [0u8; 4];
         if let Err(e) = rdr.read_exact(&mut magic) {
             return Some(Err(e.into()));
         }
         if magic != WAL_MAGIC {
-            return Some(Err(ZamError::Corruption(format!("Invalid magic: {:?}", magic))));
+            return Some(Err(ZamError::Corruption(format!(
+                "Invalid magic: {:?}",
+                magic
+            ))));
         }
 
         // 2. Read Metadata
@@ -158,9 +158,12 @@ impl Iterator for WalIterator {
             Err(e) => return Some(Err(e.into())),
         };
         if version != WAL_VERSION {
-            return Some(Err(ZamError::Corruption(format!("Unsupported version: {}", version))));
+            return Some(Err(ZamError::Corruption(format!(
+                "Unsupported version: {}",
+                version
+            ))));
         }
-        
+
         let expected_crc = match rdr.read_u32::<BigEndian>() {
             Ok(v) => v,
             Err(e) => return Some(Err(e.into())),
@@ -207,14 +210,14 @@ impl Iterator for WalIterator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::io::Write;
+    use tempfile::tempdir;
 
     #[test]
     fn test_wal_roundtrip() -> ZamResult<()> {
         let dir = tempdir()?;
         let path = dir.path().join("test.wal");
-        
+
         let mut writer = WalWriter::open(&path, SequenceNumber::ZERO)?;
         writer.append(b"hello")?;
         writer.append(b"world")?;
@@ -222,7 +225,7 @@ mod tests {
 
         let scanner = WalScanner::open(&path)?;
         let mut it = scanner.scan();
-        
+
         let r1 = it.next().unwrap().unwrap();
         assert_eq!(r1.seq.0, 0);
         assert_eq!(r1.payload, b"hello");
@@ -237,7 +240,7 @@ mod tests {
     fn test_wal_recovery_partial_write() -> ZamResult<()> {
         let dir = tempdir()?;
         let path = dir.path().join("test.wal");
-        
+
         {
             let mut writer = WalWriter::open(&path, SequenceNumber::ZERO)?;
             writer.append(b"valid")?;
@@ -265,7 +268,7 @@ mod tests {
     fn test_wal_corruption_detection() -> ZamResult<()> {
         let dir = tempdir()?;
         let path = dir.path().join("test.wal");
-        
+
         let mut writer = WalWriter::open(&path, SequenceNumber::ZERO)?;
         writer.append(b"perfect")?;
         writer.sync()?;
@@ -280,7 +283,7 @@ mod tests {
         let scanner = WalScanner::open(&path)?;
         let mut it = scanner.scan();
         let res = it.next().unwrap();
-        
+
         match res {
             Err(ZamError::Corruption(msg)) => assert!(msg.contains("CRC mismatch")),
             _ => panic!("Expected CRC mismatch error, got {:?}", res),
