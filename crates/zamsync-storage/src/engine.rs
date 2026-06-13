@@ -2,7 +2,7 @@ use crate::adapters::{FilePeerStore, WalEventStore};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
-use zamsync_core::{Event, Hlc, NodeId, ReplicationState, SequenceNumber, ZamResult};
+use zamsync_core::{Event, Hlc, NodeId, ReplicationState, SequenceNumber, SyncMessage, ZamResult};
 
 pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
     node_id: NodeId,
@@ -52,9 +52,89 @@ impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
     }
 
     pub fn apply_replicated(&mut self, event: Event) -> ZamResult<SequenceNumber> {
+        if let Some(&last) = self.replication.local_vv.entries.get(&event.origin_node.0) {
+            if event.seq <= last {
+                return Ok(event.seq);
+            }
+        }
         let now_ms = now_ms();
         self.hlc.sync(now_ms, &event.hlc);
         self.commit_event(event)
+    }
+
+    /// Returns all events from `origin_node` with `seq >= start_seq`.
+    pub fn events_since(
+        &self,
+        origin_node: NodeId,
+        start_seq: SequenceNumber,
+    ) -> ZamResult<Vec<Event>> {
+        let events = self
+            .event_store
+            .scan()?
+            .filter_map(|r| r.ok())
+            .filter(|e| e.origin_node == origin_node && e.seq.0 >= start_seq.0)
+            .collect();
+        Ok(events)
+    }
+
+    /// Builds a Handshake message from our current replication state.
+    pub fn prepare_handshake(&self) -> SyncMessage {
+        SyncMessage::Handshake {
+            node_id: self.node_id,
+            vv: self.replication.local_vv.clone(),
+        }
+    }
+
+    /// Handles an incoming sync message and returns the response messages to send back.
+    pub fn handle_sync_message(
+        &mut self,
+        from: NodeId,
+        msg: SyncMessage,
+    ) -> ZamResult<Vec<SyncMessage>> {
+        match msg {
+            SyncMessage::Handshake { vv, .. } => {
+                let our_vv = self.replication.local_vv.clone();
+                let gaps = vv.find_gaps(&our_vv);
+                let mut responses = vec![self.prepare_handshake()];
+                for (node, start_seq) in gaps {
+                    let events = self.events_since(node, start_seq)?;
+                    if !events.is_empty() {
+                        responses.push(SyncMessage::EventBatch {
+                            origin_node: node,
+                            events,
+                        });
+                    }
+                }
+                responses.push(SyncMessage::SyncComplete);
+                Ok(responses)
+            }
+            SyncMessage::PullRequest {
+                origin_node,
+                start_seq,
+                limit,
+            } => {
+                let events = self
+                    .events_since(origin_node, start_seq)?
+                    .into_iter()
+                    .take(limit as usize)
+                    .collect();
+                Ok(vec![SyncMessage::EventBatch {
+                    origin_node,
+                    events,
+                }])
+            }
+            SyncMessage::EventBatch { events, .. } => {
+                for event in events {
+                    self.apply_replicated(event)?;
+                }
+                Ok(vec![])
+            }
+            SyncMessage::SyncComplete => {
+                self.replication.peers.entry(from.0).or_default().known_vv =
+                    self.replication.local_vv.clone();
+                Ok(vec![])
+            }
+        }
     }
 
     pub fn scan_events(&self) -> ZamResult<Box<dyn Iterator<Item = ZamResult<Event>>>> {

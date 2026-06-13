@@ -30,13 +30,21 @@ impl VersionVector {
             .unwrap_or(SequenceNumber::ZERO)
     }
 
+    /// Returns the first sequence number this VV needs from `other`, for each node where
+    /// `other` is ahead. The returned `SequenceNumber` is the inclusive start of the gap
+    /// (i.e. `events_since(node, start)` should return events with `seq >= start`).
     pub fn find_gaps(&self, other: &VersionVector) -> Vec<(NodeId, SequenceNumber)> {
         let mut gaps = Vec::new();
         for (node_id_raw, other_seq) in &other.entries {
             let node_id = NodeId(*node_id_raw);
-            let local_seq = self.get(node_id);
-            if *other_seq > local_seq {
-                gaps.push((node_id, local_seq));
+            match self.entries.get(node_id_raw) {
+                Some(&local_last) if *other_seq > local_last => {
+                    gaps.push((node_id, local_last.next()));
+                }
+                None => {
+                    gaps.push((node_id, SequenceNumber::ZERO));
+                }
+                _ => {}
             }
         }
         gaps
@@ -74,4 +82,5 @@ pub enum SyncMessage {
         origin_node: NodeId,
         events: Vec<Event>,
     },
+    SyncComplete,
 }
