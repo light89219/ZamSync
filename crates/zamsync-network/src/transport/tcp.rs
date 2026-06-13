@@ -1,7 +1,7 @@
 use crate::protocol;
 use std::collections::HashMap;
 use std::io::BufWriter;
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::time::Duration;
 use zamsync_core::ports::Transport;
 use zamsync_core::{NodeId, SyncMessage, ZamError, ZamResult};
@@ -22,9 +22,25 @@ impl TcpTransport {
         })
     }
 
+    /// Returns the local address the listener is bound to.
+    pub fn local_addr(&self) -> ZamResult<SocketAddr> {
+        Ok(self.listener.local_addr()?)
+    }
+
+    /// Blocking accept: waits for one incoming connection and registers it as `peer_id`.
+    pub fn accept_peer(&mut self, peer_id: NodeId) -> ZamResult<()> {
+        self.listener.set_nonblocking(false)?;
+        let (stream, addr) = self.listener.accept()?;
+        self.listener.set_nonblocking(true)?;
+        stream.set_read_timeout(Some(Duration::from_millis(50)))?;
+        self.peers.insert(peer_id.0, stream);
+        log::info!("accepted peer {} from {}", peer_id.0, addr);
+        Ok(())
+    }
+
     pub fn connect(&mut self, peer_id: NodeId, addr: &str) -> ZamResult<()> {
         let stream = TcpStream::connect(addr)?;
-        stream.set_read_timeout(Some(Duration::from_millis(10)))?;
+        stream.set_read_timeout(Some(Duration::from_millis(50)))?;
         self.peers.insert(peer_id.0, stream);
         log::info!("connected to peer {} at {}", peer_id.0, addr);
         Ok(())
@@ -46,16 +62,6 @@ impl Transport for TcpTransport {
     }
 
     fn receive(&mut self) -> ZamResult<Option<(NodeId, SyncMessage)>> {
-        match self.listener.accept() {
-            Ok((stream, addr)) => {
-                log::debug!("incoming connection from {}", addr);
-                stream.set_read_timeout(Some(Duration::from_millis(10)))?;
-                drop(stream);
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(e) => return Err(e.into()),
-        }
-
         let peer_ids: Vec<u32> = self.peers.keys().cloned().collect();
         for peer_id_raw in peer_ids {
             if let Some(stream) = self.peers.get_mut(&peer_id_raw) {
@@ -63,12 +69,14 @@ impl Transport for TcpTransport {
                     Ok(msg) => return Ok(Some((NodeId(peer_id_raw), msg))),
                     Err(ZamError::Io(e))
                         if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut => {}
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        continue;
+                    }
                     Err(e) => return Err(e),
                 }
             }
         }
-
         Ok(None)
     }
 }

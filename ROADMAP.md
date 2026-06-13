@@ -1,27 +1,65 @@
 # ZamSync Roadmap
 
-## 🟢 Phase 0-1: Foundation & Local Persistence (In Progress)
-- [x] Workspace Initialization
-- [x] Core Type Definitions (`SequenceNumber`, `NodeId`)
-- [x] Production-Grade WAL (Atomic-like appends, CRC32, Recovery)
-- [ ] Crash-Consistency Testing Suite
+## Phase 0: Foundation (done)
 
-## 🟡 Phase 1: Event Model & State Machine
-- [ ] Binary Event Schema (using `rkyv` for zero-copy)
-- [ ] Local State Projection (Queryable view of the WAL)
-- [ ] Engine Coordination (Applying WAL events to state)
+- [x] Workspace initialization and architecture documentation
+- [x] Core type definitions: `NodeId`, `SequenceNumber`, `Hlc`
+- [x] Production-grade WAL: atomic appends, CRC32 integrity, crash recovery
+- [x] rkyv zero-copy event schema
 
-## 🔴 Phase 2: Synchronization Protocol
-- [ ] Version Vectors / HLC implementation
-- [ ] Delta Sync Algorithm (Identifying missing event ranges)
-- [ ] Conflict Resolution Strategy (LWW / CRDT-lite)
+## Phase 1: Hexagonal Architecture (done)
 
-## 🔴 Phase 3: Resilient Transport
-- [ ] Custom Binary Protocol (Optimized headers)
-- [ ] Chunking & Resumable Transfer Mechanism
-- [ ] Adaptive Backoff for unstable networks
+- [x] Port traits: `EventStore`, `PeerStore`, `StateStore`, `Transport`
+- [x] Storage adapters: `WalEventStore`, `FilePeerStore`
+- [x] Testing adapters: `InMemoryEventStore`, `InMemoryPeerStore`, `MockTransport`
+- [x] `ZamEngine<E, P, S>` generic over all I/O
+- [x] `ZamEngine::sorted_scan` -- deterministic multi-node replay via `LogSorter`
+- [x] GitHub Actions CI: fmt + clippy -D warnings + test
 
-## 🔴 Phase 4: Hardening & Performance
-- [ ] Zstd Compression with pre-shared dictionaries
-- [ ] End-to-End Encryption
-- [ ] Resource profiling (< 100MB RAM target)
+## Phase 2: Sync Protocol (done)
+
+- [x] Version Vectors with `find_gaps` (inclusive start_seq semantics)
+- [x] HLC-based total ordering and `LogSorter` k-way merge
+- [x] `SyncMessage` enum: Handshake, PullRequest, EventBatch, SyncComplete
+- [x] `ZamEngine::handle_sync_message` -- server-side state machine
+- [x] `SyncSession::sync` -- initiator-side protocol
+- [x] `SyncSession::serve_one` -- responder-side protocol
+- [x] `run_direct_sync` in `zamsync-testing` for transport-free tests
+- [x] Idempotent `apply_replicated` with VV-based dedup
+
+## Phase 3: Transport (done)
+
+- [x] Binary wire protocol: 4-byte big-endian length prefix + rkyv payload
+- [x] `TcpTransport`: non-blocking listener, `accept_peer`, `connect`
+- [x] End-to-end TCP sync test: two nodes over loopback, full convergence verified
+- [x] CLI: `info`, `submit`, `sync <peer-addr> <peer-id>`, `serve <bind-addr> <peer-id>`
+
+## Phase 4: Hardening (next)
+
+- [ ] Crash-consistency test suite: simulate WAL truncation mid-write, verify recovery
+- [ ] `serve` loop: handle multiple sequential peers (not just one-shot)
+- [ ] Reconnect and retry logic in `SyncSession`
+- [ ] Max frame size enforcement and backpressure
+- [ ] Structured logging (tracing spans per sync session)
+
+## Phase 5: Performance
+
+- [ ] Zstd compression with pre-shared dictionary (target: -70% bandwidth on repetitive payloads)
+- [ ] Streaming `EventBatch` (chunked sends instead of full-collect)
+- [ ] WAL compaction / snapshot to bound replay time on startup
+- [ ] Resource profiling: target < 100 MB RSS on embedded hardware
+
+## Phase 6: Security and Ops
+
+- [ ] End-to-end encryption (noise protocol or TLS)
+- [ ] Node authentication (pre-shared keys or certificate pinning)
+- [ ] Prometheus metrics: events/s, sync latency, VV drift
+- [ ] Docker image + systemd unit for unattended deployment
+
+## First-Deployment Target
+
+Bhutan ePIS (electronic patient information system):
+- Clinics sync patient records over intermittent satellite / 2G links
+- Nodes run on low-cost ARM hardware (Raspberry Pi class)
+- Payload: structured JSON domain events, typically 1-10 KB each
+- Acceptable sync latency: minutes to hours depending on connectivity

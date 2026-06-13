@@ -1,4 +1,6 @@
 use crate::adapters::{FilePeerStore, WalEventStore};
+use crate::sorter::LogSorter;
+use std::collections::HashMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
@@ -139,6 +141,22 @@ impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
 
     pub fn scan_events(&self) -> ZamResult<Box<dyn Iterator<Item = ZamResult<Event>>>> {
         self.event_store.scan()
+    }
+
+    /// Returns all events in deterministic global order (HLC, NodeId) via LogSorter.
+    /// This is the correct order for state projection when events from multiple nodes
+    /// are present in the WAL.
+    pub fn sorted_scan(&self) -> ZamResult<LogSorter<std::vec::IntoIter<ZamResult<Event>>>> {
+        let mut by_node: HashMap<u32, Vec<Event>> = HashMap::new();
+        for result in self.event_store.scan()? {
+            let event = result?;
+            by_node.entry(event.origin_node.0).or_default().push(event);
+        }
+        let iterators: Vec<_> = by_node
+            .into_values()
+            .map(|events| events.into_iter().map(Ok).collect::<Vec<_>>().into_iter())
+            .collect();
+        LogSorter::new(iterators)
     }
 
     pub fn state(&self) -> &S {

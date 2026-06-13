@@ -11,3 +11,7 @@ zamsync-core = { path = "../zamsync-core" }
 rkyv.workspace = true
 byteorder.workspace = true
 log.workspace = true
+
+[dev-dependencies]
+zamsync-storage = { path = "../zamsync-storage" }
+tempfile.workspace = true

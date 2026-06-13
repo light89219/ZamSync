@@ -31,9 +31,8 @@ where
         Self { engine, transport }
     }
 
-    /// Initiates a sync with `peer_id`: sends our handshake, processes the peer's
-    /// response (handshake + event batches + SyncComplete), then sends our own events
-    /// followed by SyncComplete.
+    /// Initiator side: sends our handshake, receives peer's handshake + events +
+    /// SyncComplete, then pushes our missing events and sends SyncComplete.
     pub fn sync(&mut self, peer_id: NodeId) -> ZamResult<SyncStats> {
         let mut stats = SyncStats::default();
 
@@ -42,17 +41,20 @@ where
 
         let peer_vv = self.wait_for_handshake(peer_id)?;
 
-        while let Some((from, msg)) = self.transport.receive()? {
-            if from != peer_id {
-                continue;
-            }
-            let is_complete = matches!(msg, SyncMessage::SyncComplete);
-            if let SyncMessage::EventBatch { ref events, .. } = msg {
-                stats.events_received += events.len();
-            }
-            self.engine.handle_sync_message(from, msg)?;
-            if is_complete {
-                break;
+        loop {
+            match self.transport.receive()? {
+                Some((from, msg)) if from == peer_id => {
+                    let is_complete = matches!(msg, SyncMessage::SyncComplete);
+                    if let SyncMessage::EventBatch { ref events, .. } = msg {
+                        stats.events_received += events.len();
+                    }
+                    self.engine.handle_sync_message(from, msg)?;
+                    if is_complete {
+                        break;
+                    }
+                }
+                Some(_) => continue,
+                None => continue,
             }
         }
 
@@ -72,6 +74,50 @@ where
             }
         }
         self.transport.send(peer_id, &SyncMessage::SyncComplete)?;
+
+        self.engine.sync()?;
+        Ok(stats)
+    }
+
+    /// Responder side: waits for the initiator's handshake, responds with our
+    /// handshake + events + SyncComplete, then receives initiator's events until
+    /// their SyncComplete.
+    pub fn serve_one(&mut self, peer_id: NodeId) -> ZamResult<SyncStats> {
+        let mut stats = SyncStats::default();
+
+        // Phase 1: wait for initiator's Handshake, respond immediately
+        loop {
+            match self.transport.receive()? {
+                Some((from, msg @ SyncMessage::Handshake { .. })) if from == peer_id => {
+                    let responses = self.engine.handle_sync_message(from, msg)?;
+                    for response in &responses {
+                        if let SyncMessage::EventBatch { events, .. } = response {
+                            stats.events_sent += events.len();
+                        }
+                        self.transport.send(peer_id, response)?;
+                    }
+                    break;
+                }
+                Some(_) | None => continue,
+            }
+        }
+
+        // Phase 2: receive initiator's events until their SyncComplete
+        loop {
+            match self.transport.receive()? {
+                Some((from, msg)) if from == peer_id => {
+                    let is_complete = matches!(msg, SyncMessage::SyncComplete);
+                    if let SyncMessage::EventBatch { ref events, .. } = msg {
+                        stats.events_received += events.len();
+                    }
+                    self.engine.handle_sync_message(from, msg)?;
+                    if is_complete {
+                        break;
+                    }
+                }
+                Some(_) | None => continue,
+            }
+        }
 
         self.engine.sync()?;
         Ok(stats)
