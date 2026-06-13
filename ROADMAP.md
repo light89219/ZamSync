@@ -46,9 +46,9 @@
 
 ## Phase 5: Performance
 
+- [x] Chunked `EventBatch`: 256 events/frame cap, multiple frames per sync (bounds frame size and peak memory)
+- [x] WAL compaction: drop peer-confirmed events; tombstone record preserves seq continuity; `zamsync compact` CLI command
 - [ ] Zstd compression with pre-shared dictionary (target: -70% bandwidth on repetitive payloads)
-- [ ] Streaming `EventBatch` (chunked sends instead of full-collect)
-- [ ] WAL compaction / snapshot to bound replay time on startup
 - [ ] Resource profiling: target < 100 MB RSS on embedded hardware
 
 ## Phase 6: Security and Ops
