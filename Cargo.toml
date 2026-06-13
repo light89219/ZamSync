@@ -1,11 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
+    ".",
     "crates/zamsync-core",
     "crates/zamsync-storage",
     "crates/zamsync-network",
     "crates/zamsync-testing",
 ]
+
+[package]
+name = "zamsync"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description.workspace = true
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +22,11 @@ edition = "2021"
 authors = ["ZamSync Contributors"]
 license = "MIT"
 description = "Resilient Offline-First Synchronization Engine"
+
+[dependencies]
+zamsync-storage = { path = "crates/zamsync-storage" }
+zamsync-core = { path = "crates/zamsync-core" }
+log.workspace = true
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

@@ -17,3 +17,4 @@ rkyv.workspace = true
 tempfile.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+zamsync-testing = { path = "../zamsync-testing" }
