@@ -26,10 +26,11 @@ impl StateStore for EventCounter {
 fn usage() {
     eprintln!(
         "Usage:
-  zamsync info   <data-dir>
-  zamsync submit <data-dir> <payload>
-  zamsync sync   <data-dir> <peer-addr> <peer-id>
-  zamsync serve  <data-dir> <bind-addr>"
+  zamsync info    <data-dir>
+  zamsync submit  <data-dir> <payload>
+  zamsync sync    <data-dir> <peer-addr> <peer-id>
+  zamsync serve   <data-dir> <bind-addr>
+  zamsync compact <data-dir>"
     );
 }
 
@@ -44,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("submit") => cmd_submit(&args),
         Some("sync") => cmd_sync(&args),
         Some("serve") => cmd_serve(&args),
+        Some("compact") => cmd_compact(&args),
         _ => {
             usage();
             std::process::exit(1);
@@ -172,6 +174,20 @@ fn node_id_from_dir(dir: &std::path::Path) -> NodeId {
     let id = rand_u32();
     let _ = std::fs::write(&id_file, id.to_string());
     NodeId(id)
+}
+
+fn cmd_compact(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = data_dir(args, 2)?;
+    let node_id = node_id_from_dir(&dir);
+    let mut engine = ZamEngine::open_wal(&dir, node_id, EventCounter::default())?;
+    let dropped = engine.compact()?;
+    engine.sync()?;
+    if dropped == 0 {
+        println!("nothing to compact (no peers have confirmed events yet)");
+    } else {
+        println!("compacted: dropped {dropped} WAL records");
+    }
+    Ok(())
 }
 
 fn is_transient(e: &zamsync_core::ZamError) -> bool {
