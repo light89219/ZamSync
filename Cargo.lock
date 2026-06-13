@@ -804,6 +804,12 @@ dependencies = [
 [[package]]
 name = "zamsync-network"
 version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "log",
+ "rkyv",
+ "zamsync-core",
+]
 
 [[package]]
 name = "zamsync-storage"
