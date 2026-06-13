@@ -206,6 +206,39 @@ impl<S: StateStore> ZamEngine<WalEventStore, FilePeerStore, S> {
         let peer_store = FilePeerStore::open(dir.join("peers.state"), node_id)?;
         ZamEngine::new(node_id, event_store, peer_store, state)
     }
+
+    /// Drops WAL records that ALL known peers have confirmed receiving.
+    ///
+    /// The compaction frontier is the per-node minimum of `peer.known_vv` across
+    /// all peers. A peer confirms its VV on every `SyncComplete` it sends us, so
+    /// the frontier advances as nodes sync. Events at or below the frontier are
+    /// safe to drop because no peer will ever ask for them again.
+    ///
+    /// Returns the number of records dropped. Returns 0 if there are no known
+    /// peers or if no peer has confirmed anything yet.
+    pub fn compact(&mut self) -> ZamResult<usize> {
+        if self.replication.peers.is_empty() {
+            return Ok(0);
+        }
+
+        let mut frontier: HashMap<u32, SequenceNumber> = HashMap::new();
+
+        for &node_raw in self.replication.local_vv.entries.keys() {
+            // Only compact a node's events if ALL peers have confirmed seeing them.
+            let all_confirmed = self.replication.peers.values()
+                .all(|p| p.known_vv.entries.contains_key(&node_raw));
+
+            if all_confirmed {
+                let min_seq = self.replication.peers.values()
+                    .map(|p| p.known_vv.entries[&node_raw])
+                    .min()
+                    .expect("all_confirmed guarantees at least one entry");
+                frontier.insert(node_raw, min_seq);
+            }
+        }
+
+        self.event_store.compact(&frontier)
+    }
 }
 
 fn now_ms() -> u64 {

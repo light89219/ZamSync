@@ -1,5 +1,5 @@
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
-use zamsync_core::ZamResult;
+use zamsync_core::{SyncMessage, ZamResult};
 use zamsync_storage::ZamEngine;
 
 /// Synchronises two engines in both directions without a transport layer.
@@ -18,6 +18,9 @@ where
     P2: PeerStore,
     S2: StateStore,
 {
+    let node_a = engine_a.node_id();
+    let node_b = engine_b.node_id();
+
     let vv_a = engine_a.replication_state().local_vv.clone();
     let vv_b = engine_b.replication_state().local_vv.clone();
 
@@ -36,6 +39,12 @@ where
             applied_to_b += 1;
         }
     }
+
+    // Simulate SyncComplete on both engines so that peers.known_vv reflects the
+    // sync -- matching the real protocol where each side sends SyncComplete after
+    // pushing all its missing events.
+    engine_a.handle_sync_message(node_b, SyncMessage::SyncComplete)?;
+    engine_b.handle_sync_message(node_a, SyncMessage::SyncComplete)?;
 
     Ok((applied_to_a, applied_to_b))
 }

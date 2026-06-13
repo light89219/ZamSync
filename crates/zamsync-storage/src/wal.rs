@@ -65,6 +65,33 @@ impl WalWriter {
         Ok(seq)
     }
 
+    /// Writes a record at a specific sequence number, advancing `current_seq` if
+    /// necessary. Used during WAL compaction to preserve original seq numbering
+    /// so that the next local-event seq continues from the correct position.
+    pub fn append_at_seq(&mut self, seq: SequenceNumber, payload: &[u8]) -> ZamResult<()> {
+        let len = payload.len() as u32;
+
+        let mut hasher = Hasher::new();
+        hasher.update(&[WAL_VERSION]);
+        hasher.update(&seq.0.to_be_bytes());
+        hasher.update(&len.to_be_bytes());
+        hasher.update(payload);
+        let crc = hasher.finalize();
+
+        self.file.write_all(&WAL_MAGIC)?;
+        self.file.write_u8(WAL_VERSION)?;
+        self.file.write_u32::<BigEndian>(crc)?;
+        self.file.write_u64::<BigEndian>(seq.0)?;
+        self.file.write_u32::<BigEndian>(len)?;
+        self.file.write_all(payload)?;
+        self.file.flush()?;
+
+        if seq.next() > self.current_seq {
+            self.current_seq = seq.next();
+        }
+        Ok(())
+    }
+
     pub fn sync(&mut self) -> io::Result<()> {
         self.file.get_ref().sync_all()
     }
