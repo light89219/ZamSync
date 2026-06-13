@@ -39,10 +39,10 @@ ZamSync uses **hexagonal architecture** (ports and adapters). The sync core is a
 
 ```
 zamsync-core        -- Event, HLC, VersionVector, SyncMessage, port traits
-zamsync-storage     -- WAL event store, file peer store, ZamEngine
+zamsync-storage     -- WAL event store, file peer store, ZamEngine, SyncSession
 zamsync-network     -- TCP transport, binary wire protocol
 zamsync-testing     -- In-memory adapters, MockTransport, run_direct_sync
-zamsync (binary)    -- CLI: info, submit
+zamsync (binary)    -- CLI: info, submit, sync, serve
 ```
 
 ### Port Traits
@@ -59,13 +59,12 @@ The engine `ZamEngine<E: EventStore, P: PeerStore, S: StateStore>` is generic ov
 
 ### Sync Protocol
 
-Peers exchange `SyncMessage` frames. A session:
+Peers exchange `SyncMessage` frames over TCP. Roles are asymmetric:
 
-1. Both sides send a `Handshake` carrying their Version Vector.
-2. Each side computes gaps and pushes missing `EventBatch` messages.
-3. Each side sends `SyncComplete` when done.
+- **Initiator** (`sync`): connects to peer, sends Handshake, receives peer's events, pushes own missing events, sends SyncComplete.
+- **Responder** (`serve`): accepts connection, receives Handshake, immediately pushes all missing events + SyncComplete, then waits for initiator's events.
 
-Events are idempotent: duplicate deliveries are dropped via VV check.
+The responder auto-detects the caller's `NodeId` from the first Handshake -- no manual configuration needed. Events are idempotent: duplicate deliveries are dropped via Version Vector check.
 
 ---
 
@@ -80,14 +79,31 @@ cargo build --release
 ### CLI
 
 ```bash
-# Show node status (creates data dir on first run)
+# Show node status (creates data dir and generates a node identity on first run)
 ./target/release/zamsync info /var/lib/zamsync/node1
 
-# Submit an event
+# Submit an event (appended to local WAL, flushed to disk)
 ./target/release/zamsync submit /var/lib/zamsync/node1 "hello world"
+
+# Pull events from a remote peer (initiator role)
+./target/release/zamsync sync /var/lib/zamsync/node1 192.168.1.10:7000 42
+
+# Accept incoming sync sessions continuously (responder role)
+./target/release/zamsync serve /var/lib/zamsync/node1 0.0.0.0:7000
 ```
 
-Node identity is stored in `<data-dir>/.node_id` and generated automatically on first start.
+Node identity is stored in `<data-dir>/.node_id` and generated automatically on first start. Set `RUST_LOG=info` to see structured sync traces.
+
+**Minimal two-node example:**
+
+```bash
+# Terminal 1 -- node A listens
+./target/release/zamsync serve ./node-a 0.0.0.0:7000
+
+# Terminal 2 -- node B submits an event, then syncs to A
+./target/release/zamsync submit ./node-b "patient record 1"
+./target/release/zamsync sync  ./node-b 127.0.0.1:7000 $(cat ./node-a/.node_id)
+```
 
 ### Using the Engine in Your Application
 
