@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zamsync-core",
+    "crates/zamsync-storage",
+    "crates/zamsync-network",
+    "crates/zamsync-testing",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ZamSync Contributors"]
+license = "MIT"
+description = "Resilient Offline-First Synchronization Engine"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+log = "0.4"
+rkyv = { version = "0.7", features = ["validation", "bytecheck"] }
+bytecheck = "0.6"
+crc32fast = "1.4"
+byteorder = "1.5"
+tempfile = "3.10"

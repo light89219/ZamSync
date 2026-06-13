@@ -1,0 +1,8 @@
+pub mod error;
+pub mod event;
+pub mod ports;
+pub mod sync;
+
+pub use error::{ZamError, ZamResult};
+pub use event::{Chunk, Event, Hlc, NodeId, SequenceNumber, WAL_MAGIC, WAL_VERSION};
+pub use sync::{PeerSyncState, ReplicationState, SyncMessage, VersionVector};
