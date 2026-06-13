@@ -10,7 +10,22 @@ pub struct WalEventStore {
 
 impl WalEventStore {
     pub fn open(path: impl AsRef<Path>) -> ZamResult<Self> {
-        let (last_seq, _) = WalScanner::recover(&path)?;
+        let (last_seq, end_pos) = WalScanner::recover(&path)?;
+
+        // Truncate any bytes left past the last valid record. Without this, a
+        // crash mid-write leaves a partial record in the file. WalWriter opens in
+        // APPEND mode, so new records land after the garbage -- and the next scan
+        // stops at the garbage, making those new records permanently invisible.
+        if path.as_ref().exists() {
+            let actual_len = std::fs::metadata(path.as_ref())?.len();
+            if actual_len > end_pos {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(path.as_ref())?
+                    .set_len(end_pos)?;
+            }
+        }
+
         let next_seq = last_seq.map(|s| s.next()).unwrap_or(SequenceNumber::ZERO);
         let writer = WalWriter::open(&path, next_seq)?;
         Ok(Self {

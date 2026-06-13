@@ -34,13 +34,15 @@
 - [x] End-to-end TCP sync test: two nodes over loopback, full convergence verified
 - [x] CLI: `info`, `submit`, `sync <peer-addr> <peer-id>`, `serve <bind-addr> <peer-id>`
 
-## Phase 4: Hardening (next)
+## Phase 4: Hardening (done)
 
-- [ ] Crash-consistency test suite: simulate WAL truncation mid-write, verify recovery
-- [ ] `serve` loop: handle multiple sequential peers (not just one-shot)
-- [ ] Reconnect and retry logic in `SyncSession`
-- [ ] Max frame size enforcement and backpressure
-- [ ] Structured logging (tracing spans per sync session)
+- [x] Crash-consistency test suite: WAL truncation, CRC corruption, VV recovery
+- [x] Auto-truncate partial WAL writes on open (silent data-loss fix)
+- [x] `serve` loop: continuous, auto-detects peer NodeId from Handshake
+- [x] Structured logging: tracing spans per sync session, RUST_LOG filter
+- [x] Reconnect and retry logic in `sync` CLI command (exponential backoff, 5 attempts)
+- [x] Serve loop continues on peer errors instead of dying
+- [x] Max frame size enforcement: 64 MB hard limit in wire protocol decoder
 
 ## Phase 5: Performance
 

@@ -193,6 +193,48 @@ fn test_engine_vv_consistent_after_recovery() -> ZamResult<()> {
     Ok(())
 }
 
+/// The real crash scenario: garbage bytes are appended to the WAL without any
+/// manual truncation (simulating a crash mid-write). WalEventStore::open must
+/// truncate them so that subsequent appends remain visible to future scans.
+/// Before the fix, new records were silently lost because scan() stopped at the
+/// garbage before reaching them.
+#[test]
+fn test_engine_open_truncates_partial_write() -> ZamResult<()> {
+    let dir = tempdir()?;
+    let wal_path = dir.path().join("events.wal");
+    let node = NodeId(1);
+
+    // Write and persist "durable"
+    {
+        let mut e = open_engine(&dir, node)?;
+        e.submit(1, b"durable".to_vec())?;
+        e.sync()?;
+    }
+
+    // Append raw garbage -- no manual truncation (this is the crash scenario)
+    {
+        let mut f = OpenOptions::new().append(true).open(&wal_path)?;
+        f.write_all(b"\xDE\xAD\xBE\xEF\x01\x02\x03")?;
+    }
+
+    // Open engine: must auto-truncate the garbage and accept a new event
+    {
+        let mut e = open_engine(&dir, node)?;
+        e.submit(1, b"after-crash".to_vec())?;
+        e.sync()?;
+    }
+
+    // Both events must be visible on the next open
+    let final_engine = open_engine(&dir, node)?;
+    assert_eq!(
+        final_engine.state().0,
+        2,
+        "durable + after-crash must both be visible"
+    );
+
+    Ok(())
+}
+
 /// After recovery, submitting new events continues correctly and a fresh
 /// engine can replay them all without errors.
 #[test]
