@@ -822,6 +822,9 @@ dependencies = [
 [[package]]
 name = "zamsync-testing"
 version = "0.1.0"
+dependencies = [
+ "zamsync-core",
+]
 
 [[package]]
 name = "zmij"
