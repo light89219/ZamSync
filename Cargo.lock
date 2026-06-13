@@ -792,6 +792,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zamsync"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "zamsync-core",
+ "zamsync-storage",
+]
+
+[[package]]
 name = "zamsync-core"
 version = "0.1.0"
 dependencies = [
@@ -823,6 +832,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "zamsync-core",
+ "zamsync-testing",
 ]
 
 [[package]]
@@ -830,6 +840,7 @@ name = "zamsync-testing"
 version = "0.1.0"
 dependencies = [
  "zamsync-core",
+ "zamsync-storage",
 ]
 
 [[package]]

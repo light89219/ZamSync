@@ -1,7 +1,7 @@
-use zamsync_core::{NodeId, SequenceNumber, VersionVector};
-use zamsync_core::ports::PeerStore;
-use zamsync_storage::FilePeerStore;
 use tempfile::tempdir;
+use zamsync_core::ports::PeerStore;
+use zamsync_core::{NodeId, SequenceNumber, VersionVector};
+use zamsync_storage::FilePeerStore;
 
 #[test]
 fn test_version_vector_persistence() -> Result<(), Box<dyn std::error::Error>> {
@@ -48,6 +48,8 @@ fn test_vv_gap_discovery() {
 
     let gaps = local.find_gaps(&remote);
     assert_eq!(gaps.len(), 2);
-    assert!(gaps.iter().any(|(id, seq)| id.0 == 1 && seq.0 == 10));
+    // local has node 1 up to seq 10, remote has up to 12 -> next needed: seq 11
+    assert!(gaps.iter().any(|(id, seq)| id.0 == 1 && seq.0 == 11));
+    // local has never seen node 3 -> start from seq 0 inclusive
     assert!(gaps.iter().any(|(id, seq)| id.0 == 3 && seq.0 == 0));
 }

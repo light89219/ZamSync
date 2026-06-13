@@ -1,12 +1,12 @@
-use zamsync_core::{Event, ZamResult};
-use std::collections::BinaryHeap;
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use zamsync_core::{Event, ZamResult};
 
 /// LogSorter is a mechanical merger that combines multiple event streams.
 /// It ensures that the output stream follows the deterministic global order rule.
-pub struct LogSorter<I> 
-where 
-    I: Iterator<Item = ZamResult<Event>>
+pub struct LogSorter<I>
+where
+    I: Iterator<Item = ZamResult<Event>>,
 {
     sources: Vec<std::iter::Peekable<I>>,
     heap: BinaryHeap<IndexedEvent>,
@@ -41,9 +41,9 @@ impl Ord for IndexedEvent {
     }
 }
 
-impl<I> LogSorter<I> 
-where 
-    I: Iterator<Item = ZamResult<Event>>
+impl<I> LogSorter<I>
+where
+    I: Iterator<Item = ZamResult<Event>>,
 {
     pub fn new(iterators: Vec<I>) -> ZamResult<Self> {
         let mut sources: Vec<_> = iterators.into_iter().map(|it| it.peekable()).collect();
@@ -53,7 +53,10 @@ where
         for (idx, source) in sources.iter_mut().enumerate() {
             if let Some(res) = source.next() {
                 let event = res?;
-                heap.push(IndexedEvent { event, source_idx: idx });
+                heap.push(IndexedEvent {
+                    event,
+                    source_idx: idx,
+                });
             }
         }
 
@@ -61,9 +64,9 @@ where
     }
 }
 
-impl<I> Iterator for LogSorter<I> 
-where 
-    I: Iterator<Item = ZamResult<Event>>
+impl<I> Iterator for LogSorter<I>
+where
+    I: Iterator<Item = ZamResult<Event>>,
 {
     type Item = ZamResult<Event>;
 
@@ -74,7 +77,10 @@ where
         if let Some(res) = self.sources[source_idx].next() {
             match res {
                 Ok(next_event) => {
-                    self.heap.push(IndexedEvent { event: next_event, source_idx });
+                    self.heap.push(IndexedEvent {
+                        event: next_event,
+                        source_idx,
+                    });
                 }
                 Err(e) => return Some(Err(e)),
             }

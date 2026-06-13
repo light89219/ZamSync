@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use rkyv::{Archive, Deserialize, Serialize};
 use crate::{Event, NodeId, SequenceNumber};
+use rkyv::{Archive, Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq)]
 #[archive(check_bytes)]
@@ -14,23 +14,37 @@ impl VersionVector {
     }
 
     pub fn update(&mut self, node_id: NodeId, seq: SequenceNumber) {
-        let entry = self.entries.entry(node_id.0).or_insert(SequenceNumber::ZERO);
+        let entry = self
+            .entries
+            .entry(node_id.0)
+            .or_insert(SequenceNumber::ZERO);
         if seq > *entry {
             *entry = seq;
         }
     }
 
     pub fn get(&self, node_id: NodeId) -> SequenceNumber {
-        self.entries.get(&node_id.0).cloned().unwrap_or(SequenceNumber::ZERO)
+        self.entries
+            .get(&node_id.0)
+            .cloned()
+            .unwrap_or(SequenceNumber::ZERO)
     }
 
+    /// Returns the first sequence number this VV needs from `other`, for each node where
+    /// `other` is ahead. The returned `SequenceNumber` is the inclusive start of the gap
+    /// (i.e. `events_since(node, start)` should return events with `seq >= start`).
     pub fn find_gaps(&self, other: &VersionVector) -> Vec<(NodeId, SequenceNumber)> {
         let mut gaps = Vec::new();
         for (node_id_raw, other_seq) in &other.entries {
             let node_id = NodeId(*node_id_raw);
-            let local_seq = self.get(node_id);
-            if *other_seq > local_seq {
-                gaps.push((node_id, local_seq));
+            match self.entries.get(node_id_raw) {
+                Some(&local_last) if *other_seq > local_last => {
+                    gaps.push((node_id, local_last.next()));
+                }
+                None => {
+                    gaps.push((node_id, SequenceNumber::ZERO));
+                }
+                _ => {}
             }
         }
         gaps
@@ -68,4 +82,5 @@ pub enum SyncMessage {
         origin_node: NodeId,
         events: Vec<Event>,
     },
+    SyncComplete,
 }

@@ -1,5 +1,5 @@
-use std::io::{Read, Write};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 use zamsync_core::{ZamError, ZamResult};
 
 pub const MAX_FRAME_SIZE: u32 = 64 * 1024 * 1024;

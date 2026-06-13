@@ -1,10 +1,10 @@
+use crate::protocol;
 use std::collections::HashMap;
 use std::io::BufWriter;
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
-use zamsync_core::{NodeId, SyncMessage, ZamError, ZamResult};
 use zamsync_core::ports::Transport;
-use crate::protocol;
+use zamsync_core::{NodeId, SyncMessage, ZamError, ZamResult};
 
 pub struct TcpTransport {
     listener: TcpListener,
@@ -37,9 +37,10 @@ impl TcpTransport {
 
 impl Transport for TcpTransport {
     fn send(&mut self, peer_id: NodeId, message: &SyncMessage) -> ZamResult<()> {
-        let stream = self.peers.get_mut(&peer_id.0).ok_or_else(|| {
-            ZamError::Protocol(format!("no connection to peer {}", peer_id.0))
-        })?;
+        let stream = self
+            .peers
+            .get_mut(&peer_id.0)
+            .ok_or_else(|| ZamError::Protocol(format!("no connection to peer {}", peer_id.0)))?;
         let mut writer = BufWriter::new(stream as &TcpStream);
         protocol::encode(message, &mut writer)
     }
