@@ -6,8 +6,8 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
 use zamsync_core::{
-    Event, Hlc, NodeId, PayloadSchema, ReplicationState, SequenceNumber, SyncMessage,
-    VersionVector, ZamResult,
+    AccessPolicy, Event, Hlc, NodeId, PayloadSchema, ReplicationState, SequenceNumber,
+    SyncMessage, VersionVector, ZamResult,
 };
 
 /// Maximum events per `EventBatch` frame. Bounds frame size and peak memory
@@ -22,6 +22,7 @@ pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
     hlc: Hlc,
     replication: ReplicationState,
     schema: PayloadSchema,
+    policy: AccessPolicy,
 }
 
 impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
@@ -53,13 +54,19 @@ impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
             hlc: max_hlc,
             replication,
             schema: PayloadSchema::None,
+            policy: AccessPolicy::All,
         })
     }
 
-    /// Set the payload schema for this engine (builder pattern).
-    /// Validation runs on every `submit()` and `apply_replicated()` call.
     pub fn with_schema(mut self, schema: PayloadSchema) -> Self {
         self.schema = schema;
+        self
+    }
+
+    /// Set the access policy for this engine (builder pattern).
+    /// `OwnOnly` makes this node only send a peer the events it originally submitted.
+    pub fn with_policy(mut self, policy: AccessPolicy) -> Self {
+        self.policy = policy;
         self
     }
 
@@ -127,6 +134,10 @@ impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
                 let gaps = vv.find_gaps(&our_vv);
                 let mut responses = vec![self.prepare_handshake()];
                 for (node, start_seq) in gaps {
+                    // OwnOnly: a peer may only retrieve events it originally submitted.
+                    if matches!(self.policy, AccessPolicy::OwnOnly) && node != from {
+                        continue;
+                    }
                     let events = self.events_since(node, start_seq)?;
                     for chunk in events.chunks(EVENTS_PER_BATCH) {
                         responses.push(SyncMessage::EventBatch {
@@ -273,4 +284,110 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use zamsync_core::ZamError;
+
+    #[derive(Default)]
+    struct Sink;
+    impl StateStore for Sink {
+        fn apply_event(&mut self, _seq: SequenceNumber, _e: &Event) -> ZamResult<()> { Ok(()) }
+        fn last_applied_seq(&self) -> Option<SequenceNumber> { None }
+    }
+
+    fn collected_payloads(responses: &[SyncMessage]) -> Vec<Vec<u8>> {
+        responses.iter().flat_map(|m| {
+            if let SyncMessage::EventBatch { events, .. } = m {
+                events.iter().map(|e| e.payload.clone()).collect::<Vec<_>>()
+            } else {
+                vec![]
+            }
+        }).collect()
+    }
+
+    fn make_dirs(base: &std::path::Path) -> ZamResult<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)> {
+        let hub = base.join("hub");
+        let a = base.join("clinic_a");
+        let b = base.join("clinic_b");
+        std::fs::create_dir_all(&hub)?;
+        std::fs::create_dir_all(&a)?;
+        std::fs::create_dir_all(&b)?;
+        Ok((hub, a, b))
+    }
+
+    // Populates a hub with events from two clinics (submitted from separate dirs),
+    // then returns the hub + two EMPTY-WAL nodes with the same NodeIds (fresh restore scenario).
+    fn setup_hub_two_clinics(
+        tmp: &std::path::Path,
+        policy: AccessPolicy,
+    ) -> ZamResult<(
+        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
+        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
+        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
+    )> {
+        for sub in ["hub", "src_a", "src_b", "fresh_a", "fresh_b"] {
+            std::fs::create_dir_all(tmp.join(sub))?;
+        }
+        let mut src_a = ZamEngine::open_wal(tmp.join("src_a"), NodeId(2), Sink)?;
+        let mut src_b = ZamEngine::open_wal(tmp.join("src_b"), NodeId(3), Sink)?;
+        src_a.submit(1, b"clinic-a-record".to_vec())?;
+        src_b.submit(1, b"clinic-b-record".to_vec())?;
+
+        let mut hub = ZamEngine::open_wal(tmp.join("hub"), NodeId(1), Sink)?.with_policy(policy);
+        for e in src_a.scan_events()?.filter_map(|r: Result<Event, ZamError>| r.ok()) { hub.apply_replicated(e)?; }
+        for e in src_b.scan_events()?.filter_map(|r: Result<Event, ZamError>| r.ok()) { hub.apply_replicated(e)?; }
+
+        // Empty WAL nodes -- same NodeIds, no local events (simulate restore request)
+        let fresh_a = ZamEngine::open_wal(tmp.join("fresh_a"), NodeId(2), Sink)?;
+        let fresh_b = ZamEngine::open_wal(tmp.join("fresh_b"), NodeId(3), Sink)?;
+        Ok((hub, fresh_a, fresh_b))
+    }
+
+    #[test]
+    fn test_access_policy_all_shares_everything() -> ZamResult<()> {
+        let tmp = tempdir()?;
+        let (mut hub, fresh_a, _) = setup_hub_two_clinics(tmp.path(), AccessPolicy::All)?;
+
+        // Empty-WAL clinic_a asks hub -- hub has both clinics' events, sends both
+        let handshake = fresh_a.prepare_handshake(); // VV is empty
+        let responses = hub.handle_sync_message(NodeId(2), handshake)?;
+        let payloads = collected_payloads(&responses);
+
+        assert_eq!(payloads.len(), 2, "All policy: hub sends both events to clinic_a");
+        Ok(())
+    }
+
+    #[test]
+    fn test_access_policy_own_only_isolates_clinic_a() -> ZamResult<()> {
+        let tmp = tempdir()?;
+        let (mut hub, fresh_a, _) = setup_hub_two_clinics(tmp.path(), AccessPolicy::OwnOnly)?;
+
+        // Empty-WAL clinic_a asks hub with OwnOnly -- must NOT receive clinic_b's records
+        let handshake = fresh_a.prepare_handshake();
+        let responses = hub.handle_sync_message(NodeId(2), handshake)?;
+        let payloads = collected_payloads(&responses);
+
+        assert_eq!(payloads.len(), 1, "OwnOnly: clinic_a gets only its own event");
+        assert_eq!(payloads[0], b"clinic-a-record");
+        Ok(())
+    }
+
+    #[test]
+    fn test_access_policy_own_only_isolates_clinic_b() -> ZamResult<()> {
+        let tmp = tempdir()?;
+        let (mut hub, _, fresh_b) = setup_hub_two_clinics(tmp.path(), AccessPolicy::OwnOnly)?;
+
+        // Empty-WAL clinic_b asks hub with OwnOnly -- must NOT receive clinic_a's records
+        let handshake = fresh_b.prepare_handshake();
+        let responses = hub.handle_sync_message(NodeId(3), handshake)?;
+        let payloads = collected_payloads(&responses);
+
+        assert_eq!(payloads.len(), 1, "OwnOnly: clinic_b gets only its own event");
+        assert_eq!(payloads[0], b"clinic-b-record");
+        Ok(())
+    }
 }

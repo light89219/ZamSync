@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use zamsync_core::ports::StateStore;
 use zamsync_core::{Event, NodeId, SequenceNumber, ZamResult};
 use zamsync_network::TlsConfig;
-use zamsync_storage::{EncryptionKey, PayloadSchema};
+use zamsync_storage::{AccessPolicy, EncryptionKey, PayloadSchema};
 
 #[derive(Default)]
 pub struct EventCounter {
@@ -81,6 +81,13 @@ pub fn load_schema(args: &[String]) -> Result<PayloadSchema, Box<dyn std::error:
     match flag_value(args, "--schema") {
         Some(s) => PayloadSchema::from_str(s).map_err(|e| e.into()),
         None => Ok(PayloadSchema::None),
+    }
+}
+
+pub fn load_policy(args: &[String]) -> Result<AccessPolicy, Box<dyn std::error::Error>> {
+    match flag_value(args, "--policy") {
+        Some(s) => AccessPolicy::from_str(s).map_err(|e| e.into()),
+        None => Ok(AccessPolicy::All),
     }
 }
 
