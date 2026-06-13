@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
-use zamsync_core::{Event, Hlc, NodeId, ReplicationState, SequenceNumber, SyncMessage, ZamResult};
+use zamsync_core::{
+    Event, Hlc, NodeId, ReplicationState, SequenceNumber, SyncMessage, VersionVector, ZamResult,
+};
 
 pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
     node_id: NodeId,
@@ -18,16 +20,23 @@ pub struct ZamEngine<E: EventStore, P: PeerStore, S: StateStore> {
 impl<E: EventStore, P: PeerStore, S: StateStore> ZamEngine<E, P, S> {
     pub fn new(node_id: NodeId, event_store: E, peer_store: P, mut state: S) -> ZamResult<Self> {
         let mut max_hlc = Hlc::default();
+        let mut wal_vv = VersionVector::default();
 
         for event_res in event_store.scan()? {
             let event = event_res?;
             if event.hlc > max_hlc {
                 max_hlc = event.hlc;
             }
+            // Rebuild VV from WAL: the WAL is the authoritative source of truth.
+            // A crash can leave peers.state ahead of the WAL, which would corrupt
+            // the VV and cause events to be considered "already seen" when they are not.
+            wal_vv.update(event.origin_node, event.seq);
             state.apply_event(event.seq, &event)?;
         }
 
-        let replication = peer_store.load()?;
+        let mut replication = peer_store.load()?;
+        // Override local_vv with the WAL-derived VV. Peer knowledge entries are kept.
+        replication.local_vv = wal_vv;
 
         Ok(Self {
             node_id,
