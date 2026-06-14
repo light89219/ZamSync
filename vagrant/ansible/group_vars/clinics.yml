@@ -1,9 +1,0 @@
----
-zamsync_role: clinic
-zamsync_policy: own
-# Each clinic stores data in its own directory named after the hostname
-zamsync_data_dir: "/var/lib/zamsync/{{ inventory_hostname }}"
-# Clinics get tc netem applied on their outbound interface
-apply_netem: true
-# Interface facing the private network (eth1 in VirtualBox, adjust if needed)
-netem_interface: eth1

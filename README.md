@@ -529,45 +529,43 @@ See [tests/README.md](tests/README.md) for details.
 
 ---
 
-## Hospital Network Simulation (Vagrant + Ansible)
+## Hospital Network Simulation
 
-A full Vagrant environment that spins up a realistic multi-clinic deployment and
-benchmarks ZamSync under simulated 2G / satellite / 3G network conditions.
-Includes a self-contained HTML report comparing ZamSync against IPFS.
-
-```bash
-cd vagrant/
-CLINIC_COUNT=4 vagrant up
-
-# Provision: install ZamSync binary, generate PKI, start systemd services
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/provision.yml
-
-# Run the Bhutan 2G scenario: 4 clinics x 500 patient events, sync, verify
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/scenario.yml
-
-# Open the benchmark report with charts
-start results/report.html  # Windows
-open  results/report.html  # macOS
-```
-
-Network profiles:
-
-| Profile | Latency | Bandwidth | Packet loss |
-|---------|---------|-----------|-------------|
-| `bhutan_2g` (default) | 600ms ± 100ms | 30 kbps | 5% |
-| `satellite` | 1200ms ± 200ms | 100 kbps | 2% |
-| `urban_3g` | 80ms ± 20ms | 1 Mbps | 0.1% |
+Multi-clinic network simulation using **Docker + Toxiproxy** -- no VMs, no Ansible,
+runs on any machine that has Docker and works in CI.
 
 ```bash
-# Switch profile at runtime
-ansible-playbook ... -e active_network_profile=satellite -e events_per_clinic=2000
+# 4 clinics x 500 events, Bhutan 2G profile (600ms latency, 30 kbps)
+docker compose -f tests/docker-compose.network.yml \
+  up --build --abort-on-container-exit
+
+# Report is written to tests/results/report.html
+start tests\results\report.html   # Windows
+open  tests/results/report.html   # Linux
 ```
 
-The report includes ZamSync vs IPFS comparison: memory footprint (~4 MB vs ~210 MB),
-per-event wire overhead (21 bytes vs 256+ bytes), mTLS, encryption at rest, access
-control, and deterministic ordering -- all missing from IPFS.
+Override profile and scale:
 
-See [vagrant/README.md](vagrant/README.md) for full documentation.
+```bash
+PROFILE=satellite EVENTS=2000 CLINIC_COUNT=8 \
+  docker compose -f tests/docker-compose.network.yml \
+  up --build --abort-on-container-exit
+```
+
+Network profiles (applied via Toxiproxy):
+
+| Profile | Latency | Bandwidth | Scenario |
+|---------|---------|-----------|----------|
+| `bhutan_2g` (default) | 600ms ± 100ms | 30 kbps | Rural clinic, 2G/EDGE |
+| `satellite` | 1200ms ± 200ms | 100 kbps | Very remote, VSAT |
+| `urban_3g` | 80ms ± 20ms | 1 Mbps | Urban 3G baseline |
+
+The generated report includes:
+- Sync duration per clinic (bar chart)
+- ZamSync bytes transferred vs IPFS estimated overhead (same event count)
+- Memory footprint: ZamSync ~4 MB vs IPFS daemon ~210 MB
+- Per-event wire overhead: ZamSync 21 bytes vs IPFS 256+ bytes
+- 12-row feature comparison table (mTLS, encryption at rest, access control, ARM support ...)
 
 ---
 

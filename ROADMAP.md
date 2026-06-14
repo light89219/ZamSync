@@ -170,13 +170,14 @@
 Objective: prove with reproducible metrics that ZamSync outperforms alternatives
 (IPFS, rsync) for offline-first sync on constrained hospital networks.
 
-- [x] **Vagrant topology**: 1 hub + N clinics (configurable via `CLINIC_COUNT`), Ubuntu 22.04 LTS, 512 MB RAM each (Raspberry Pi class)
-- [x] **tc netem network profiles**: Bhutan 2G (600ms + 30 kbps + 5% loss), satellite (1200ms + 100 kbps), urban 3G (80ms + 1 Mbps)
-- [x] **Ansible provisioning**: full workflow -- keygen on hub, sign clinic certs, systemd service, automated PKI rotation
-- [x] **Scenario playbook**: 6-phase automated test -- offline submission, network degradation, simultaneous sync from N clinics, convergence verification, metric collection
-- [x] **Self-contained HTML report**: Chart.js embedded -- sync duration per clinic, bandwidth (ZamSync vs IPFS estimated), memory footprint, per-event wire overhead
+- [x] **Docker + Toxiproxy topology**: 1 hub + N clinics in parallel containers (`CLINIC_COUNT`), Toxiproxy per clinic, runs in CI and locally -- no VMs, no Ansible
+- [x] **Network profiles via Toxiproxy**: Bhutan 2G (600ms + 30 kbps), satellite (1200ms + 100 kbps), urban 3G (80ms + 1 Mbps)
+- [x] **Parallel scenario**: all clinics generate events offline then sync simultaneously; hub convergence verified
+- [x] **Self-contained HTML report**: Chart.js embedded -- sync duration per clinic, bandwidth (ZamSync actual vs IPFS estimated), memory footprint, per-event wire overhead
 - [x] **ZamSync vs IPFS comparison table**: mTLS, encryption at rest, access control, deterministic ordering, RAM footprint, binary size, ARM support
-- [ ] **Mid-sync cut test**: Ansible playbook that disables the hub mid-sync (simulates power cut), resumes, verifies zero data loss
+- [x] **GitHub Actions workflow** (`e2e-network.yml`): runs on every PR, uploads HTML report as artifact
+- [ ] **Mid-sync cut test**: cut Toxiproxy proxy mid-sync, verify resume with zero data loss (already tested in `real_world_bhutan_test.sh` for single node; extend to multi-clinic)
+- [ ] **Satellite profile deep run**: 8 clinics x 2000 events on satellite profile; publish report to GitHub Pages
 - [ ] **Multi-run aggregation**: run 3 scenarios back-to-back, aggregate stats into a single report (mean, p95 sync time)
 - [ ] **CI integration**: GitHub Actions workflow that runs the Vagrant simulation on a Linux runner and publishes the report as a GitHub Pages artifact
 

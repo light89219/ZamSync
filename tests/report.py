@@ -62,7 +62,7 @@ def make_report(results_dir: Path):
     clinics = [n for n in nodes if n.get("role") == "clinic"]
 
     if not nodes:
-        print("No metrics found in results/. Run the scenario playbook first.")
+        print("No metrics found in results/. Run the scenario first.")
         sys.exit(1)
 
     profile = scenario.get("profile", {})
@@ -71,19 +71,13 @@ def make_report(results_dir: Path):
     hub_events = hub["events"] if hub else 0
     convergence_pct = (hub_events / total_expected * 100) if total_expected > 0 else 0
 
-    # Build chart data
     clinic_names = [c["node"] for c in clinics]
     sync_times = [c.get("sync_duration_s", 0) for c in clinics]
     bytes_sent = [c.get("bytes_sent", 0) for c in clinics]
     memory_rss = [c.get("memory_rss_kb", 0) / 1024 for c in clinics]
 
-    # Estimated IPFS bytes for same workload (using overhead multiplier)
     ipfs_bytes_est = [
         int(events_per_clinic * IPFS_COMPARISON["bytes_per_event"])
-        for _ in clinics
-    ]
-    zamsync_bytes_est = [
-        int(events_per_clinic * ZAMSYNC_FACTS["bytes_per_event"])
         for _ in clinics
     ]
 
@@ -103,7 +97,6 @@ def make_report(results_dir: Path):
     --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a;
     --text: #e2e8f0; --muted: #94a3b8; --accent: #6366f1;
     --green: #22c55e; --red: #ef4444; --yellow: #eab308;
-    --blue: #3b82f6; --orange: #f97316;
   }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 2rem; }}
@@ -134,7 +127,7 @@ def make_report(results_dir: Path):
 
 <h1>ZamSync Hospital Network Simulation</h1>
 <p class="subtitle">
-  Scenario: {scenario.get("network_profile", "bhutan_2g")} &mdash;
+  Profile: {scenario.get("network_profile", "bhutan_2g")} &mdash;
   {profile.get("label", "")} &mdash;
   {len(clinics)} clinic node(s) &mdash;
   {events_per_clinic} events per clinic &mdash;
@@ -159,10 +152,6 @@ def make_report(results_dir: Path):
     <div class="kpi">
       <div class="kpi-value">{total_bytes / 1024:.1f} KB</div>
       <div class="kpi-label">Total Bytes Transferred</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-value">{avg_mem:.1f} MB</div>
-      <div class="kpi-label">Avg Clinic Memory (RSS)</div>
     </div>
     <div class="kpi">
       <div class="kpi-value">{profile.get('delay_ms', '?')}ms / {profile.get('bandwidth_kbps', '?')}kbps</div>
@@ -232,7 +221,7 @@ def make_report(results_dir: Path):
         <td>Min RAM footprint</td>
         <td><span class="yes">~4 MB</span></td>
         <td><span class="no">~150 MB</span></td>
-        <td>ZamSync targets RPi class (512 MB), IPFS daemon is heavy</td>
+        <td>ZamSync targets RPi class (512 MB); IPFS daemon is heavy</td>
       </tr>
       <tr>
         <td>WAL record overhead</td>
@@ -289,7 +278,6 @@ def make_report(results_dir: Path):
         <th>Role</th>
         <th>Events</th>
         <th>WAL size</th>
-        <th>Memory RSS</th>
         <th>Sync time</th>
         <th>Bytes sent</th>
         <th>Status</th>
@@ -301,11 +289,10 @@ def make_report(results_dir: Path):
         <td>{n['node']}</td>
         <td>{n.get('role', '?')}</td>
         <td>{n['events']}</td>
-        <td>{n['wal_size_bytes'] / 1024:.1f} KB</td>
-        <td>{n['memory_rss_kb'] / 1024:.1f} MB</td>
-        <td>{n.get('sync_duration_s', 0)}s</td>
+        <td>{n.get('wal_size_bytes', 0) / 1024:.1f} KB</td>
+        <td>{n.get('sync_duration_s', '--')}s</td>
         <td>{n.get('bytes_sent', 0) / 1024:.1f} KB</td>
-        <td><span class="badge badge-ok">OK</span></td>
+        <td><span class="badge {'badge-ok' if not n.get('error') else 'badge-warn'}">{('OK' if not n.get('error') else 'FAILED')}</span></td>
       </tr>""" for n in nodes)}
     </tbody>
   </table>
@@ -319,11 +306,11 @@ def make_report(results_dir: Path):
 <script>
 const COLORS = {{
   zamsync: 'rgba(99, 102, 241, 0.8)',
-  ipfs: 'rgba(239, 68, 68, 0.7)',
-  border_z: 'rgba(99, 102, 241, 1)',
-  border_i: 'rgba(239, 68, 68, 1)',
+  ipfs:    'rgba(239, 68, 68, 0.7)',
+  bz: 'rgba(99, 102, 241, 1)',
+  bi: 'rgba(239, 68, 68, 1)',
 }};
-const chartDefaults = {{
+const base = {{
   plugins: {{ legend: {{ labels: {{ color: '#94a3b8' }} }} }},
   scales: {{
     x: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ color: '#2a2d3a' }} }},
@@ -331,65 +318,59 @@ const chartDefaults = {{
   }}
 }};
 
-// 1 -- Sync duration
 new Chart(document.getElementById('syncTimeChart'), {{
   type: 'bar',
   data: {{
     labels: {json.dumps(clinic_names)},
-    datasets: [{{
-      label: 'Sync duration (s)',
-      data: {json.dumps(sync_times)},
-      backgroundColor: COLORS.zamsync,
-      borderColor: COLORS.border_z,
-      borderWidth: 1,
-    }}]
+    datasets: [{{ label: 'Sync duration (s)', data: {json.dumps(sync_times)},
+      backgroundColor: COLORS.zamsync, borderColor: COLORS.bz, borderWidth: 1 }}]
   }},
-  options: {{ ...chartDefaults, plugins: {{ ...chartDefaults.plugins, title: {{ display: true, text: 'Profile: {profile.get("label", "")} -- {profile.get("delay_ms","?")}ms / {profile.get("bandwidth_kbps","?")}kbps', color: '#94a3b8' }} }} }}
+  options: {{ ...base, plugins: {{ ...base.plugins,
+    title: {{ display: true, color: '#94a3b8',
+      text: 'Profile: {profile.get("label", "")} -- {profile.get("delay_ms","?")}ms / {profile.get("bandwidth_kbps","?")}kbps' }} }} }}
 }});
 
-// 2 -- Bandwidth ZamSync vs IPFS
 new Chart(document.getElementById('bandwidthChart'), {{
   type: 'bar',
   data: {{
     labels: {json.dumps(clinic_names)},
     datasets: [
-      {{ label: 'ZamSync (bytes sent)', data: {json.dumps([b for b in bytes_sent])}, backgroundColor: COLORS.zamsync, borderColor: COLORS.border_z, borderWidth: 1 }},
-      {{ label: 'IPFS estimated (same events)', data: {json.dumps(ipfs_bytes_est)}, backgroundColor: COLORS.ipfs, borderColor: COLORS.border_i, borderWidth: 1 }}
+      {{ label: 'ZamSync (bytes sent)', data: {json.dumps(bytes_sent)},
+        backgroundColor: COLORS.zamsync, borderColor: COLORS.bz, borderWidth: 1 }},
+      {{ label: 'IPFS estimated (same events)', data: {json.dumps(ipfs_bytes_est)},
+        backgroundColor: COLORS.ipfs, borderColor: COLORS.bi, borderWidth: 1 }}
     ]
   }},
-  options: {{ ...chartDefaults }}
+  options: base
 }});
 
-// 3 -- Memory
 new Chart(document.getElementById('memoryChart'), {{
   type: 'bar',
   data: {{
     labels: {json.dumps(clinic_names + ['IPFS daemon'])},
     datasets: [{{
       label: 'RSS (MB)',
-      data: {json.dumps(memory_rss + [IPFS_COMPARISON['memory_mb']])},
+      data: {json.dumps([round(m, 1) for m in memory_rss] + [IPFS_COMPARISON['memory_mb']])},
       backgroundColor: {json.dumps(['rgba(99,102,241,0.8)'] * len(clinics) + ['rgba(239,68,68,0.7)'])},
-      borderColor: {json.dumps(['rgba(99,102,241,1)'] * len(clinics) + ['rgba(239,68,68,1)'])},
+      borderColor:     {json.dumps(['rgba(99,102,241,1)']   * len(clinics) + ['rgba(239,68,68,1)'])},
       borderWidth: 1
     }}]
   }},
-  options: {{ ...chartDefaults }}
+  options: base
 }});
 
-// 4 -- Per-event overhead
 new Chart(document.getElementById('overheadChart'), {{
   type: 'bar',
   data: {{
     labels: ['ZamSync WAL record', 'IPFS block (CID + header)'],
-    datasets: [{{
-      label: 'Bytes of overhead per event',
+    datasets: [{{ label: 'Bytes of overhead per event',
       data: [{ZAMSYNC_FACTS['bytes_per_event']}, {IPFS_COMPARISON['bytes_per_event']}],
       backgroundColor: [COLORS.zamsync, COLORS.ipfs],
-      borderColor: [COLORS.border_z, COLORS.border_i],
+      borderColor: [COLORS.bz, COLORS.bi],
       borderWidth: 1
     }}]
   }},
-  options: {{ ...chartDefaults }}
+  options: base
 }});
 </script>
 </body>
@@ -398,7 +379,7 @@ new Chart(document.getElementById('overheadChart'), {{
 
     out_path = results_dir / "report.html"
     out_path.write_text(html, encoding="utf-8")
-    print(f"Report generated: {out_path.resolve()}")
+    print(f"Report: {out_path.resolve()}")
     return str(out_path.resolve())
 
 
