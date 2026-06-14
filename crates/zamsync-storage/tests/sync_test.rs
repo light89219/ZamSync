@@ -1,5 +1,5 @@
 use zamsync_core::ports::StateStore;
-use zamsync_core::{Event, NodeId, SequenceNumber, SyncMessage, VersionVector, ZamResult};
+use zamsync_core::{Event, Hlc, NodeId, SequenceNumber, SyncMessage, VersionVector, ZamResult};
 use zamsync_storage::ZamEngine;
 use zamsync_testing::{run_direct_sync, InMemoryEventStore, InMemoryPeerStore};
 
@@ -126,6 +126,101 @@ fn test_handle_sync_message_handshake() -> Result<(), Box<dyn std::error::Error>
         matches!(last, SyncMessage::SyncComplete),
         "last message must be SyncComplete"
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_submit_hlc_strictly_monotonic() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = make_engine(NodeId(1))?;
+
+    for i in 0..30u32 {
+        engine.submit(i, vec![i as u8])?;
+    }
+
+    let events: Vec<Event> = engine.scan_events()?.collect::<ZamResult<_>>()?;
+    assert_eq!(events.len(), 30);
+
+    for window in events.windows(2) {
+        assert!(
+            window[1].hlc > window[0].hlc,
+            "HLC must be strictly monotonic: {:?} not > {:?}",
+            window[1].hlc,
+            window[0].hlc
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn test_apply_replicated_idempotent() -> Result<(), Box<dyn std::error::Error>> {
+    let node_a = NodeId(1);
+    let node_b = NodeId(2);
+
+    let mut engine_a = make_engine(node_a)?;
+    let mut engine_b = make_engine(node_b)?;
+
+    engine_a.submit(1, b"patient-P001".to_vec())?;
+    engine_a.submit(1, b"patient-P002".to_vec())?;
+
+    let events: Vec<Event> = engine_a.scan_events()?.collect::<ZamResult<_>>()?;
+    assert_eq!(events.len(), 2);
+
+    // Apply the same two events to B three times -- only one copy must be stored.
+    for _ in 0..3 {
+        for e in &events {
+            engine_b.apply_replicated(e.clone())?;
+        }
+    }
+
+    let b_events: Vec<Event> = engine_b.scan_events()?.collect::<ZamResult<_>>()?;
+    assert_eq!(b_events.len(), 2, "repeated apply_replicated must be idempotent");
+    assert_eq!(b_events[0].payload, b"patient-P001");
+    assert_eq!(b_events[1].payload, b"patient-P002");
+
+    // VV on B must reflect A's highest seq exactly once, not inflated.
+    let vv = &engine_b.replication_state().local_vv;
+    assert_eq!(vv.get(node_a), events.last().unwrap().seq);
+
+    Ok(())
+}
+
+#[test]
+fn test_event_batch_before_handshake_does_not_panic() -> Result<(), Box<dyn std::error::Error>> {
+    // At the transport layer, EventBatch before Handshake is already rejected by
+    // accept_any(). This test verifies that the engine itself doesn't panic or
+    // corrupt state if such a message somehow reaches handle_sync_message directly.
+    let mut engine = make_engine(NodeId(1))?;
+    let sender = NodeId(2);
+
+    let early_event = Event {
+        origin_node: sender,
+        seq: SequenceNumber(0),
+        hlc: Hlc::new(1000, 0),
+        event_type: 1,
+        payload: b"early-payload".to_vec(),
+    };
+
+    // EventBatch with no prior Handshake: engine applies it and returns no responses.
+    let responses = engine.handle_sync_message(
+        sender,
+        SyncMessage::EventBatch {
+            origin_node: sender,
+            events: vec![early_event],
+        },
+    )?;
+    assert!(responses.is_empty(), "EventBatch must return no response messages");
+
+    // The event is applied to the WAL -- state is consistent.
+    let events: Vec<Event> = engine.scan_events()?.collect::<ZamResult<_>>()?;
+    assert_eq!(events.len(), 1, "event must be stored even without a prior Handshake");
+    assert_eq!(events[0].payload, b"early-payload");
+
+    // A subsequent Handshake still works correctly.
+    let handshake = engine.prepare_handshake();
+    let mut engine_b = make_engine(NodeId(3))?;
+    let responses = engine_b.handle_sync_message(NodeId(1), handshake)?;
+    assert!(responses.iter().any(|m| matches!(m, SyncMessage::SyncComplete)));
 
     Ok(())
 }
