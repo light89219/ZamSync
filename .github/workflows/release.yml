@@ -18,9 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Use GITHUB_TOKEN with write access.
-          # If branch protection requires PR reviews, add an exception for
-          # github-actions[bot] in Settings -> Branches -> bypass list.
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate version format
@@ -51,4 +48,10 @@ jobs:
         run: |
           git tag "v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
-          echo "Tagged v${{ inputs.version }} -- build-release.yml will now run"
+
+      - name: Trigger build-release.yml on tag
+        run: |
+          gh workflow run build-release.yml --ref "v${{ inputs.version }}"
+          echo "Dispatched build-release.yml on v${{ inputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
