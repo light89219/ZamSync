@@ -181,6 +181,18 @@ Objective: prove with reproducible metrics that ZamSync outperforms alternatives
 - [ ] **Multi-run aggregation**: run 3 scenarios back-to-back, aggregate stats into a single report (mean, p95 sync time)
 - [ ] **CI integration**: GitHub Actions workflow that runs the Vagrant simulation on a Linux runner and publishes the report as a GitHub Pages artifact
 
+## Phase 14: Concurrent Hub
+
+Discovered during Phase 13 field simulation: the hub serves one peer at a time
+(single-thread accept loop in `src/cmd/serve.rs`). With 4 clinics syncing in
+parallel, they queue -- total wall time = sum of individual sync times instead
+of max. At 30 kbps / 600ms latency, 4 clinics took 14s instead of the expected ~3-4s.
+
+- [ ] **Concurrent peer handling**: spawn one thread (or async task) per accepted connection; hub processes N clinics simultaneously instead of queuing them
+- [ ] **Connection limit flag**: `--max-peers 16` to cap concurrent connections and prevent resource exhaustion on low-memory devices
+- [ ] **Benchmark**: re-run Phase 13 simulation after fix; expected total sync time to drop from ~14s to ~3-4s for 4 simultaneous clinics at 30 kbps
+- [ ] **Backpressure**: if `--max-peers` is reached, hub queues incoming connections with a configurable timeout instead of rejecting them
+
 ## First-Deployment Target
 
 ZamSync is a generic sync engine. The reference scenario is the Bhutan ePIS
