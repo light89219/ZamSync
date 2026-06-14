@@ -9,6 +9,9 @@ use zamsync_core::{NodeId, SyncMessage, ZamError, ZamResult};
 
 struct PeerConn {
     stream: TcpStream,
+    /// Bytes accumulated across 50ms poll cycles. A frame may arrive in many
+    /// small reads on slow links; we must not lose partial bytes on timeout.
+    frame_buf: protocol::FrameBuffer,
     /// One message read ahead (e.g. Handshake consumed during accept_any).
     pending: Option<SyncMessage>,
 }
@@ -43,6 +46,7 @@ impl TcpTransport {
             peer_id.0,
             PeerConn {
                 stream,
+                frame_buf: protocol::FrameBuffer::new(),
                 pending: None,
             },
         );
@@ -78,6 +82,7 @@ impl TcpTransport {
             node_id.0,
             PeerConn {
                 stream,
+                frame_buf: protocol::FrameBuffer::new(),
                 pending: Some(msg),
             },
         );
@@ -97,6 +102,7 @@ impl TcpTransport {
             peer_id.0,
             PeerConn {
                 stream,
+                frame_buf: protocol::FrameBuffer::new(),
                 pending: None,
             },
         );
@@ -123,17 +129,19 @@ impl Transport for TcpTransport {
         let peer_ids: Vec<u32> = self.peers.keys().cloned().collect();
         for peer_id_raw in peer_ids {
             if let Some(peer) = self.peers.get_mut(&peer_id_raw) {
+                // Drain any pre-buffered message first (e.g. the initial Handshake).
                 if let Some(msg) = peer.pending.take() {
                     return Ok(Some((NodeId(peer_id_raw), msg)));
                 }
-                match protocol::decode(&mut peer.stream) {
-                    Ok(msg) => return Ok(Some((NodeId(peer_id_raw), msg))),
-                    Err(ZamError::Io(e))
-                        if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut =>
-                    {
-                        continue;
+                // Use the per-connection FrameBuffer to assemble complete frames
+                // even when the 50ms read timeout fires in the middle of a frame.
+                match peer.frame_buf.try_read_frame(&mut peer.stream) {
+                    Ok(Some(bytes)) => {
+                        let msg = rkyv::from_bytes::<SyncMessage>(&bytes)
+                            .map_err(|e| ZamError::Serialization(format!("{}", e)))?;
+                        return Ok(Some((NodeId(peer_id_raw), msg)));
                     }
+                    Ok(None) => continue, // not enough bytes yet
                     Err(e) => return Err(e),
                 }
             }
