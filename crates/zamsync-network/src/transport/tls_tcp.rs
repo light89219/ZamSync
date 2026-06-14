@@ -166,6 +166,42 @@ impl TlsTcpTransport {
     pub fn peer_count(&self) -> usize {
         self.peers.len()
     }
+
+    /// Accepts one TLS connection and returns a self-contained per-peer transport.
+    ///
+    /// Unlike [`accept_any`], the connection is not stored in the internal
+    /// HashMap. The returned [`TlsPeerTransport`] is `Send` and can be moved
+    /// into a worker thread for concurrent hub serving.
+    pub fn accept_split(&mut self) -> ZamResult<TlsPeerTransport> {
+        self.listener.set_nonblocking(false)?;
+        let (tcp, addr) = self.listener.accept()?;
+        self.listener.set_nonblocking(true)?;
+        tcp.set_read_timeout(Some(Duration::from_millis(5_000)))?;
+
+        let conn = ServerConnection::new(Arc::clone(&self.server_config))
+            .map_err(|e| ZamError::Config(format!("TLS server init: {e}")))?;
+        let mut tls = TlsStream::Server(StreamOwned::new(conn, tcp));
+
+        let msg = protocol::decode(&mut tls)?;
+        let node_id = match &msg {
+            SyncMessage::Handshake { node_id, .. } => *node_id,
+            other => {
+                warn!(?other, "expected Handshake as first TLS message");
+                return Err(ZamError::Protocol(
+                    "first message from TLS peer must be a Handshake".into(),
+                ));
+            }
+        };
+
+        tls.set_read_timeout(Some(Duration::from_millis(50)))?;
+        info!(peer = node_id.0, %addr, "TLS peer accepted (split mode)");
+        Ok(TlsPeerTransport {
+            peer_id: node_id,
+            stream: tls,
+            frame_buf: crate::protocol::FrameBuffer::new(),
+            pending: Some(msg),
+        })
+    }
 }
 
 impl Transport for TlsTcpTransport {
@@ -196,6 +232,47 @@ impl Transport for TlsTcpTransport {
             }
         }
         Ok(None)
+    }
+}
+
+/// A single-connection TLS transport returned by [`TlsTcpTransport::accept_split`].
+///
+/// Owns exactly one TLS stream and implements [`Transport`] for that peer.
+/// `Send`-safe (both rustls `StreamOwned` variants are `Send`): move it into
+/// a worker thread so the hub can serve N TLS peers concurrently.
+pub struct TlsPeerTransport {
+    peer_id: NodeId,
+    stream: TlsStream,
+    frame_buf: protocol::FrameBuffer,
+    pending: Option<SyncMessage>,
+}
+
+impl TlsPeerTransport {
+    /// NodeId extracted from the peer's opening Handshake.
+    pub fn peer_id(&self) -> NodeId {
+        self.peer_id
+    }
+}
+
+impl Transport for TlsPeerTransport {
+    fn send(&mut self, _peer_id: NodeId, message: &SyncMessage) -> ZamResult<()> {
+        let mut writer = BufWriter::new(&mut self.stream);
+        protocol::encode(message, &mut writer)
+    }
+
+    fn receive(&mut self) -> ZamResult<Option<(NodeId, SyncMessage)>> {
+        if let Some(msg) = self.pending.take() {
+            return Ok(Some((self.peer_id, msg)));
+        }
+        match self.frame_buf.try_read_frame(&mut self.stream) {
+            Ok(Some(bytes)) => {
+                let msg = rkyv::from_bytes::<SyncMessage>(&bytes)
+                    .map_err(|e| ZamError::Serialization(format!("{}", e)))?;
+                Ok(Some((self.peer_id, msg)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
