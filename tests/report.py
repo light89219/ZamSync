@@ -11,7 +11,6 @@ Usage:
 """
 
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +69,7 @@ def make_report(results_dir: Path):
     total_expected = events_per_clinic * len(clinics)
     hub_events = hub["events"] if hub else 0
     convergence_pct = (hub_events / total_expected * 100) if total_expected > 0 else 0
+    hub_events_note = "estimated from WAL size" if not hub else ""
 
     clinic_names = [c["node"] for c in clinics]
     sync_times = [c.get("sync_duration_s", 0) for c in clinics]
@@ -84,6 +84,9 @@ def make_report(results_dir: Path):
     avg_sync_time = sum(sync_times) / len(sync_times) if sync_times else 0
     total_bytes = sum(bytes_sent)
     avg_mem = sum(memory_rss) / len(memory_rss) if memory_rss else 0
+
+    serving_mode = scenario.get("serving_mode", "sequential")
+    is_sequential = serving_mode == "sequential"
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -143,15 +146,19 @@ def make_report(results_dir: Path):
     </div>
     <div class="kpi">
       <div class="kpi-value">{hub_events}</div>
-      <div class="kpi-label">Events on Hub / {total_expected} expected</div>
+      <div class="kpi-label">Events on Hub / {total_expected} expected{"&nbsp;&mdash; " + hub_events_note if hub_events_note else ""}</div>
     </div>
     <div class="kpi">
       <div class="kpi-value">{avg_sync_time:.0f}s</div>
-      <div class="kpi-label">Avg Sync Duration</div>
+      <div class="kpi-label">Avg Sync Duration{"&nbsp;(sequential queue)" if is_sequential else ""}</div>
     </div>
     <div class="kpi">
       <div class="kpi-value">{total_bytes / 1024:.1f} KB</div>
       <div class="kpi-label">Total Bytes Transferred</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-value">{avg_mem:.1f} MB</div>
+      <div class="kpi-label">Avg Clinic Memory (RSS)</div>
     </div>
     <div class="kpi">
       <div class="kpi-value">{profile.get('delay_ms', '?')}ms / {profile.get('bandwidth_kbps', '?')}kbps</div>
