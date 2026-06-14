@@ -311,4 +311,55 @@ mod tests {
             .client_config()
             .expect("client config builds -- rejection happens at handshake");
     }
+
+    /// A node cert whose `not_after` is in the past must be rejected by the
+    /// WebPki verifier -- this mirrors what rustls does at the TLS handshake.
+    #[test]
+    fn test_expired_cert_rejected_at_handshake() {
+        install_crypto_provider();
+
+        let ca_key = rcgen::KeyPair::generate().expect("CA key");
+        let mut ca_params =
+            rcgen::CertificateParams::new(vec!["ZamSync CA".to_string()]).expect("CA params");
+        ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let ca_cert = ca_params.self_signed(&ca_key).expect("CA self-sign");
+
+        // Build a node cert whose validity window is entirely in the past (1970-01-01..1970-01-02).
+        let node_key = rcgen::KeyPair::generate().expect("node key");
+        let mut node_params =
+            rcgen::CertificateParams::new(vec!["zamsync.local".to_string()]).expect("node params");
+        node_params.not_before =
+            time::OffsetDateTime::from_unix_timestamp(0).expect("epoch start");
+        node_params.not_after =
+            time::OffsetDateTime::from_unix_timestamp(86400).expect("epoch + 1 day");
+        let expired_cert = node_params
+            .signed_by(&node_key, &ca_cert, &ca_key)
+            .expect("sign expired cert");
+
+        let ca_pem = ca_cert.pem();
+        let expired_pem = expired_cert.pem();
+
+        let ca_der: Vec<_> = rustls_pemfile::certs(&mut ca_pem.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .expect("parse CA DER");
+        let expired_der: Vec<_> = rustls_pemfile::certs(&mut expired_pem.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .expect("parse expired cert DER");
+
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.add(ca_der[0].clone()).expect("add CA to root store");
+
+        let verifier =
+            rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
+                .build()
+                .expect("build verifier");
+
+        // Verify against current wall-clock time: the cert expired in 1970 so it must fail.
+        let now = rustls::pki_types::UnixTime::now();
+        let result = verifier.verify_client_cert(&expired_der[0], &[], now);
+        assert!(
+            result.is_err(),
+            "expired certificate must be rejected; got Ok instead"
+        );
+    }
 }

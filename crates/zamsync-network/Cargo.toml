@@ -24,3 +24,4 @@ rcgen.workspace = true
 [dev-dependencies]
 zamsync-storage = { version = "1.0.3", path = "../zamsync-storage" }
 tempfile.workspace = true
+time = "0.3"
