@@ -4,10 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description.workspace = true
+description = "WAL-backed event store with ChaCha20-Poly1305 encryption for ZamSync"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-zamsync-core = { path = "../zamsync-core" }
+zamsync-core = { version = "1.0.3", path = "../zamsync-core" }
 chacha20poly1305 = "0.10"
 crc32fast.workspace = true
 byteorder.workspace = true
@@ -20,4 +24,4 @@ metrics.workspace = true
 tempfile.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-zamsync-testing = { path = "../zamsync-testing" }
+zamsync-testing = { version = "1.0.3", path = "../zamsync-testing" }

@@ -15,18 +15,26 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [workspace.package]
 version = "1.0.4"
 edition = "2021"
-authors = ["ZamSync Contributors"]
+authors = ["Mathéo Delbarre"]
 license = "MIT"
-description = "Resilient Offline-First Synchronization Engine"
+description = "Resilient offline-first synchronization engine for intermittent-connectivity deployments"
+repository = "https://github.com/Etoile-Bleu/ZamSync"
+homepage = "https://github.com/Etoile-Bleu/ZamSync"
+keywords = ["sync", "replication", "offline", "wal", "distributed"]
+categories = ["database-implementations", "network-programming"]
 
 [dependencies]
-zamsync-storage = { path = "crates/zamsync-storage" }
-zamsync-network = { path = "crates/zamsync-network" }
-zamsync-core = { path = "crates/zamsync-core" }
+zamsync-storage = { version = "1.0.3", path = "crates/zamsync-storage" }
+zamsync-network = { version = "1.0.3", path = "crates/zamsync-network" }
+zamsync-core = { version = "1.0.3", path = "crates/zamsync-core" }
 log.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

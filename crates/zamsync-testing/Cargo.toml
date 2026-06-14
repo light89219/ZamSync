@@ -4,8 +4,12 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description.workspace = true
+description = "In-memory adapters and test helpers for ZamSync"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-zamsync-core = { path = "../zamsync-core" }
-zamsync-storage = { path = "../zamsync-storage" }
+zamsync-core = { version = "1.0.3", path = "../zamsync-core" }
+zamsync-storage = { version = "1.0.3", path = "../zamsync-storage" }

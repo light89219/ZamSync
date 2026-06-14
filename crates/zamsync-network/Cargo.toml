@@ -4,10 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description.workspace = true
+description = "TCP and mTLS transport for the ZamSync distributed sync engine"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
-zamsync-core = { path = "../zamsync-core" }
+zamsync-core = { version = "1.0.3", path = "../zamsync-core" }
 rkyv.workspace = true
 byteorder.workspace = true
 log.workspace = true
@@ -18,5 +22,5 @@ rustls-pemfile.workspace = true
 rcgen.workspace = true
 
 [dev-dependencies]
-zamsync-storage = { path = "../zamsync-storage" }
+zamsync-storage = { version = "1.0.3", path = "../zamsync-storage" }
 tempfile.workspace = true
