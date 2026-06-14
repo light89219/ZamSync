@@ -188,6 +188,7 @@ fn tcp_loop(
 
         if let Err(e) = std::thread::Builder::new()
             .name(format!("sync-peer-{}", peer_id.0))
+            .stack_size(512 * 1024) // 512 KB -- sync sessions are I/O-bound, no deep stacks
             .spawn(move || serve_peer_tcp(dir, node_id, enc_key, schema, policy, permit, pt))
         {
             eprintln!("thread spawn failed for peer {}: {e}", peer_id.0);
@@ -253,6 +254,7 @@ fn tls_loop(
 
         if let Err(e) = std::thread::Builder::new()
             .name(format!("tls-peer-{}", peer_id.0))
+            .stack_size(512 * 1024)
             .spawn(move || serve_peer_tls(dir, node_id, enc_key, schema, policy, permit, pt))
         {
             eprintln!("TLS thread spawn failed for peer {}: {e}", peer_id.0);
