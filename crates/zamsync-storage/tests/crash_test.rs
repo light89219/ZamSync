@@ -235,6 +235,67 @@ fn test_engine_open_truncates_partial_write() -> ZamResult<()> {
     Ok(())
 }
 
+/// Corrupting the magic bytes of the second record stops recovery after the first.
+/// This tests a different code path than CRC corruption (magic check fires first).
+#[test]
+fn test_wal_corrupt_magic_stops_recovery() -> ZamResult<()> {
+    let dir = tempdir()?;
+    let path = dir.path().join("test.wal");
+
+    let first_payload = b"good";
+    let mut w = WalWriter::open(&path, SequenceNumber::ZERO)?;
+    w.append(first_payload)?;
+    w.append(b"bad-record")?;
+    w.sync()?;
+
+    // Overwrite the magic bytes (bytes 0-3) of the second record.
+    let second_record_offset = (WAL_HEADER_SIZE + first_payload.len()) as u64;
+    {
+        let mut f = OpenOptions::new().write(true).open(&path)?;
+        f.seek(SeekFrom::Start(second_record_offset))?;
+        f.write_all(&[0x00, 0x00, 0x00, 0x00])?;
+    }
+
+    let (last_seq, _) = WalScanner::recover(&path)?;
+    assert_eq!(
+        last_seq,
+        Some(SequenceNumber(0)),
+        "magic corruption must stop recovery after the first record"
+    );
+
+    Ok(())
+}
+
+/// Corrupting the version byte of the second record stops recovery after the first.
+#[test]
+fn test_wal_corrupt_version_stops_recovery() -> ZamResult<()> {
+    let dir = tempdir()?;
+    let path = dir.path().join("test.wal");
+
+    let first_payload = b"valid";
+    let mut w = WalWriter::open(&path, SequenceNumber::ZERO)?;
+    w.append(first_payload)?;
+    w.append(b"after")?;
+    w.sync()?;
+
+    // Byte 4 of the second record is the version field.
+    let version_offset = (WAL_HEADER_SIZE + first_payload.len() + 4) as u64;
+    {
+        let mut f = OpenOptions::new().write(true).open(&path)?;
+        f.seek(SeekFrom::Start(version_offset))?;
+        f.write_all(&[0xFF])?; // unknown version
+    }
+
+    let (last_seq, _) = WalScanner::recover(&path)?;
+    assert_eq!(
+        last_seq,
+        Some(SequenceNumber(0)),
+        "unknown version byte must stop recovery after the first record"
+    );
+
+    Ok(())
+}
+
 /// After recovery, submitting new events continues correctly and a fresh
 /// engine can replay them all without errors.
 #[test]
