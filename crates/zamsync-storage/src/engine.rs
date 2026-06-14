@@ -6,8 +6,8 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zamsync_core::ports::{EventStore, PeerStore, StateStore};
 use zamsync_core::{
-    AccessPolicy, Event, Hlc, NodeId, PayloadSchema, ReplicationState, SequenceNumber,
-    SyncMessage, VersionVector, ZamResult,
+    AccessPolicy, Event, Hlc, NodeId, PayloadSchema, ReplicationState, SequenceNumber, SyncMessage,
+    VersionVector, ZamResult,
 };
 
 /// Maximum events per `EventBatch` frame. Bounds frame size and peak memory
@@ -263,11 +263,17 @@ impl<S: StateStore> ZamEngine<WalEventStore, FilePeerStore, S> {
 
         for &node_raw in self.replication.local_vv.entries.keys() {
             // Only compact a node's events if ALL peers have confirmed seeing them.
-            let all_confirmed = self.replication.peers.values()
+            let all_confirmed = self
+                .replication
+                .peers
+                .values()
                 .all(|p| p.known_vv.entries.contains_key(&node_raw));
 
             if all_confirmed {
-                let min_seq = self.replication.peers.values()
+                let min_seq = self
+                    .replication
+                    .peers
+                    .values()
                     .map(|p| p.known_vv.entries[&node_raw])
                     .min()
                     .expect("all_confirmed guarantees at least one entry");
@@ -294,29 +300,29 @@ mod tests {
 
     #[derive(Default)]
     struct Sink;
+
+    type TestEngine =
+        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>;
     impl StateStore for Sink {
-        fn apply_event(&mut self, _seq: SequenceNumber, _e: &Event) -> ZamResult<()> { Ok(()) }
-        fn last_applied_seq(&self) -> Option<SequenceNumber> { None }
+        fn apply_event(&mut self, _seq: SequenceNumber, _e: &Event) -> ZamResult<()> {
+            Ok(())
+        }
+        fn last_applied_seq(&self) -> Option<SequenceNumber> {
+            None
+        }
     }
 
     fn collected_payloads(responses: &[SyncMessage]) -> Vec<Vec<u8>> {
-        responses.iter().flat_map(|m| {
-            if let SyncMessage::EventBatch { events, .. } = m {
-                events.iter().map(|e| e.payload.clone()).collect::<Vec<_>>()
-            } else {
-                vec![]
-            }
-        }).collect()
-    }
-
-    fn make_dirs(base: &std::path::Path) -> ZamResult<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)> {
-        let hub = base.join("hub");
-        let a = base.join("clinic_a");
-        let b = base.join("clinic_b");
-        std::fs::create_dir_all(&hub)?;
-        std::fs::create_dir_all(&a)?;
-        std::fs::create_dir_all(&b)?;
-        Ok((hub, a, b))
+        responses
+            .iter()
+            .flat_map(|m| {
+                if let SyncMessage::EventBatch { events, .. } = m {
+                    events.iter().map(|e| e.payload.clone()).collect::<Vec<_>>()
+                } else {
+                    vec![]
+                }
+            })
+            .collect()
     }
 
     // Populates a hub with events from two clinics (submitted from separate dirs),
@@ -324,11 +330,7 @@ mod tests {
     fn setup_hub_two_clinics(
         tmp: &std::path::Path,
         policy: AccessPolicy,
-    ) -> ZamResult<(
-        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
-        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
-        ZamEngine<crate::adapters::WalEventStore, crate::adapters::FilePeerStore, Sink>,
-    )> {
+    ) -> ZamResult<(TestEngine, TestEngine, TestEngine)> {
         for sub in ["hub", "src_a", "src_b", "fresh_a", "fresh_b"] {
             std::fs::create_dir_all(tmp.join(sub))?;
         }
@@ -338,8 +340,18 @@ mod tests {
         src_b.submit(1, b"clinic-b-record".to_vec())?;
 
         let mut hub = ZamEngine::open_wal(tmp.join("hub"), NodeId(1), Sink)?.with_policy(policy);
-        for e in src_a.scan_events()?.filter_map(|r: Result<Event, ZamError>| r.ok()) { hub.apply_replicated(e)?; }
-        for e in src_b.scan_events()?.filter_map(|r: Result<Event, ZamError>| r.ok()) { hub.apply_replicated(e)?; }
+        for e in src_a
+            .scan_events()?
+            .filter_map(|r: Result<Event, ZamError>| r.ok())
+        {
+            hub.apply_replicated(e)?;
+        }
+        for e in src_b
+            .scan_events()?
+            .filter_map(|r: Result<Event, ZamError>| r.ok())
+        {
+            hub.apply_replicated(e)?;
+        }
 
         // Empty WAL nodes -- same NodeIds, no local events (simulate restore request)
         let fresh_a = ZamEngine::open_wal(tmp.join("fresh_a"), NodeId(2), Sink)?;
@@ -357,7 +369,11 @@ mod tests {
         let responses = hub.handle_sync_message(NodeId(2), handshake)?;
         let payloads = collected_payloads(&responses);
 
-        assert_eq!(payloads.len(), 2, "All policy: hub sends both events to clinic_a");
+        assert_eq!(
+            payloads.len(),
+            2,
+            "All policy: hub sends both events to clinic_a"
+        );
         Ok(())
     }
 
@@ -371,7 +387,11 @@ mod tests {
         let responses = hub.handle_sync_message(NodeId(2), handshake)?;
         let payloads = collected_payloads(&responses);
 
-        assert_eq!(payloads.len(), 1, "OwnOnly: clinic_a gets only its own event");
+        assert_eq!(
+            payloads.len(),
+            1,
+            "OwnOnly: clinic_a gets only its own event"
+        );
         assert_eq!(payloads[0], b"clinic-a-record");
         Ok(())
     }
@@ -386,7 +406,11 @@ mod tests {
         let responses = hub.handle_sync_message(NodeId(3), handshake)?;
         let payloads = collected_payloads(&responses);
 
-        assert_eq!(payloads.len(), 1, "OwnOnly: clinic_b gets only its own event");
+        assert_eq!(
+            payloads.len(),
+            1,
+            "OwnOnly: clinic_b gets only its own event"
+        );
         assert_eq!(payloads[0], b"clinic-b-record");
         Ok(())
     }

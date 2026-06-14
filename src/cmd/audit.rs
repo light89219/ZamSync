@@ -1,6 +1,6 @@
-use crate::util::{data_dir, flag_value, load_encryption_key, node_id_from_dir, EventCounter};
+use crate::util::{data_dir, flag_value, load_encryption_key, node_id_from_dir, open_engine};
 use sha2::{Digest, Sha256};
-use zamsync_storage::ZamEngine;
+use zamsync_storage::PayloadSchema;
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dir = data_dir(args, 2)?;
@@ -10,11 +10,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let only_node: Option<u32> = flag_value(args, "--node").and_then(|v| v.parse().ok());
 
     let node_id = node_id_from_dir(&dir);
-
-    let engine = match enc_key {
-        Some(key) => ZamEngine::open_wal_encrypted(&dir, node_id, EventCounter::default(), key)?,
-        None => ZamEngine::open_wal(&dir, node_id, EventCounter::default())?,
-    };
+    let engine = open_engine(&dir, node_id, enc_key, PayloadSchema::None)?;
 
     if format == "text" {
         println!(
@@ -103,7 +99,16 @@ fn unix_ms_to_iso(ms: u64) -> String {
     let months: [u64; 12] = [
         31,
         if is_leap(year) { 29 } else { 28 },
-        31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
     ];
     let mut month = 1u32;
     for &dm in &months {
@@ -119,7 +124,7 @@ fn unix_ms_to_iso(ms: u64) -> String {
 }
 
 fn is_leap(year: u32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
 }
 
 #[cfg(test)]

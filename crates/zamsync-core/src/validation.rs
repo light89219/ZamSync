@@ -15,9 +15,11 @@ pub enum PayloadSchema {
     JsonRequired(Vec<String>),
 }
 
-impl PayloadSchema {
+impl std::str::FromStr for PayloadSchema {
+    type Err = String;
+
     /// Parse a schema from a CLI flag value (`"none"`, `"json"`, `"json+key1,key2"`).
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "none" {
             return Ok(Self::None);
         }
@@ -32,7 +34,9 @@ impl PayloadSchema {
             "unknown schema '{s}': use 'none', 'json', or 'json+field1,field2'"
         ))
     }
+}
 
+impl PayloadSchema {
     pub fn is_none(&self) -> bool {
         matches!(self, Self::None)
     }
@@ -57,8 +61,7 @@ impl PayloadSchema {
 }
 
 fn json_parse(payload: &[u8]) -> ZamResult<serde_json::Value> {
-    serde_json::from_slice(payload)
-        .map_err(|e| ZamError::Validation(format!("invalid JSON: {e}")))
+    serde_json::from_slice(payload).map_err(|e| ZamError::Validation(format!("invalid JSON: {e}")))
 }
 
 #[cfg(test)]
@@ -73,7 +76,9 @@ mod tests {
 
     #[test]
     fn test_json_accepts_valid() {
-        assert!(PayloadSchema::Json.validate(br#"{"type":"patient_admitted"}"#).is_ok());
+        assert!(PayloadSchema::Json
+            .validate(br#"{"type":"patient_admitted"}"#)
+            .is_ok());
         assert!(PayloadSchema::Json.validate(b"42").is_ok());
         assert!(PayloadSchema::Json.validate(b"null").is_ok());
     }
@@ -101,9 +106,20 @@ mod tests {
 
     #[test]
     fn test_from_str_round_trip() {
-        assert!(matches!(PayloadSchema::from_str("none").unwrap(), PayloadSchema::None));
-        assert!(matches!(PayloadSchema::from_str("json").unwrap(), PayloadSchema::Json));
-        let PayloadSchema::JsonRequired(fields) = PayloadSchema::from_str("json+type,patient_id").unwrap() else { panic!() };
+        use std::str::FromStr;
+        assert!(matches!(
+            PayloadSchema::from_str("none").unwrap(),
+            PayloadSchema::None
+        ));
+        assert!(matches!(
+            PayloadSchema::from_str("json").unwrap(),
+            PayloadSchema::Json
+        ));
+        let PayloadSchema::JsonRequired(fields) =
+            PayloadSchema::from_str("json+type,patient_id").unwrap()
+        else {
+            panic!()
+        };
         assert_eq!(fields, ["type", "patient_id"]);
         assert!(PayloadSchema::from_str("bad").is_err());
     }

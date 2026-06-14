@@ -66,10 +66,69 @@
 - [x] Payload schema validation: `--schema none|json|json+field1,field2` on all write commands; validates at `submit()` and `apply_replicated()`; prevents malformed events from entering or propagating through the WAL
 - [x] Access control: `--policy own` on `serve`; hub only returns to each clinic the events that clinic originally submitted; clinic A cannot read clinic B's patient records; 3 integration tests verify isolation
 
+## Phase 8: E2E Resilience Testing
+
+- [x] Toxiproxy-based E2E test suite: `tests/docker-compose.test.yml` + `tests/real_world_bhutan_test.sh`
+- [x] 2G network simulation: 600ms latency, 100ms jitter, 30 KB/s bandwidth throttle via Toxiproxy
+- [x] Mid-sync connection cut: proxy disabled after 2s, client sync interrupted at the TCP layer
+- [x] Reconnection and resume: VV-based deduplication ensures only missing events are retransmitted
+- [x] Initiator wait-for-EOF: `sync()` now blocks until the responder closes the connection, preventing premature socket reset
+- [x] End-to-end integrity check: 5000 events generated offline, transferred, cut, resumed, and verified on server with zero loss or duplication
+- [x] Color-coded test output: PERFECT / GOOD / CRITICAL metrics displayed per phase of the scenario
+- [x] CI-ready: GitHub Actions workflow snippet documented in `tests/README.md`
+
+## Phase 9: PKI Multi-Nœud
+
+- [x] `zamsync sign <clinic-dir> --ca <hub-dir>` -- signs a clinic node cert with the hub CA; multiple clinic nodes share the same CA root without each generating their own CA
+- [x] `zamsync keygen` generates the hub CA + hub node cert; clinics receive a cert signed by `sign`, not their own CA
+- [x] mTLS multi-clinic tests: hub CA signs Clinic A and Clinic B; rogue node with its own CA is rejected at TLS handshake (2 integration tests in `zamsync-network`)
+- [x] WAL key rotation: `zamsync rekey <data-dir> --old-key <path> --new-key <path>` -- re-encrypts all WAL records with a new key atomically (tmp file + rename)
+- [x] Clippy `FromStr` trait: `PayloadSchema` and `AccessPolicy` now implement `std::str::FromStr` instead of plain `from_str` methods
+
+## Phase 10: Compatibilité Bases de Données et Écosystème
+
+### Projection Service (remplacement sécurisé du script shell)
+
+- [ ] `zamsync project <data-dir> --target postgres://...` — service de projection officiel; lit le WAL ZamSync et insère les events dans une base cible via requêtes paramétrées (zéro injection SQL)
+- [ ] Checkpoint persistant : reprend depuis le dernier `seq` projeté après redémarrage; aucun doublon en base cible
+- [ ] Batch configurable : `--batch-size 100` pour regrouper les inserts et réduire les round-trips réseau
+- [ ] Support bases de données :
+  - [ ] **PostgreSQL** — `INSERT ... ON CONFLICT DO NOTHING` sur `(origin_node, seq)`
+  - [ ] **MySQL / MariaDB** — `INSERT IGNORE INTO ...`
+  - [ ] **SQLite** — projection locale pour appareils embarqués sans PG
+  - [ ] **MongoDB** — upsert sur `{origin: node_id, seq: seq}`
+  - [ ] **ClickHouse** — append-only table pour analytics sur events de santé / IoT
+- [ ] Mode dry-run : `--dry-run` affiche les events qui seraient projetés sans toucher la base
+
+### Event Stream (push au lieu de polling)
+
+- [ ] `zamsync stream <data-dir>` — expose un endpoint SSE (`text/event-stream`) ou WebSocket que les services consommateurs écoutent en temps réel; élimine le besoin de poller `zamsync audit` en boucle
+- [ ] Filtre par `--node <id>` et `--since <seq>` sur le stream pour ne recevoir que les events pertinents
+- [ ] Permet aux frontends React/Vue de consommer les events directement via EventSource sans polling
+
+### SDKs Clients
+
+- [ ] **Python SDK** (`pip install zamsync`) — `ZamSyncClient.submit()`, `ZamSyncClient.stream()`, connexion au daemon local via socket Unix ou HTTP; remplace les appels shell
+- [ ] **Node.js / TypeScript SDK** (`npm install zamsync-client`) — idem, pour backends Express/NestJS et frontends Next.js
+- [ ] **REST API** embarquée (`zamsync serve --http 0.0.0.0:8080`) — `POST /submit`, `GET /events?since=<seq>`, `GET /health`, `GET /metrics`; permet l'intégration sans SDK depuis n'importe quel langage
+
+### Intégration CI/CD
+
+- [ ] Image Docker officielle publiée sur GHCR avec tags `latest`, `arm64`, `armv7`
+- [ ] Helm chart pour déploiement Kubernetes (hub en Deployment, nœuds en DaemonSet)
+- [ ] GitHub Actions réutilisable : `uses: zamsync/actions/deploy-hub@v1`
+
 ## First-Deployment Target
 
-Bhutan ePIS (electronic patient information system):
-- Clinics sync patient records over intermittent satellite / 2G links
-- Nodes run on low-cost ARM hardware (Raspberry Pi class)
-- Payload: structured JSON domain events, typically 1-10 KB each
-- Acceptable sync latency: minutes to hours depending on connectivity
+ZamSync est un moteur de synchronisation générique. Le scénario de référence est le Bhutan ePIS (electronic patient information system), mais l'architecture est agnostique au domaine métier et applicable à tout cas offline-first sur réseau intermittent.
+
+Cas d'usage validés :
+- Collecte de données terrain (santé rurale, agriculture, ONG)
+- Réplication de logs d'audit entre sites sans cloud central
+- Sync de capteurs IoT en connectivité dégradée
+- Event sourcing multi-site avec isolation par tenant (`--policy own`)
+
+Contraintes matérielles cibles :
+- Nodes : ARM64 / ARMv7 (Raspberry Pi class), 512 MB RAM minimum
+- Payload : événements JSON structurés, typiquement 1–10 KB
+- Latence de sync acceptable : de quelques secondes à plusieurs heures selon connectivité
