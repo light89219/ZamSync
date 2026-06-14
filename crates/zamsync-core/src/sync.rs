@@ -163,6 +163,39 @@ mod tests {
     }
 
     #[test]
+    fn test_vv_find_gaps_200_peers_correct_at_scale() {
+        const PEER_COUNT: u32 = 200;
+
+        let mut local = VersionVector::new();
+        let mut remote = VersionVector::new();
+
+        // local knows the first 100 peers (up to seq 5 each).
+        // remote knows all 200 peers (up to seq 10 each).
+        for i in 0..PEER_COUNT {
+            remote.update(NodeId(i), SequenceNumber(10));
+            if i < 100 {
+                local.update(NodeId(i), SequenceNumber(5));
+            }
+        }
+
+        let gaps = local.find_gaps(&remote);
+        assert_eq!(gaps.len(), PEER_COUNT as usize, "must find 200 gaps");
+
+        let gap_map: HashMap<u32, SequenceNumber> =
+            gaps.into_iter().map(|(n, s)| (n.0, s)).collect();
+
+        for i in 0..PEER_COUNT {
+            if i < 100 {
+                // local has seq 5, remote has 10 → need seq 6
+                assert_eq!(gap_map[&i], SequenceNumber(6), "peer {i}: expected next seq 6");
+            } else {
+                // unknown to local → need from seq 0
+                assert_eq!(gap_map[&i], SequenceNumber::ZERO, "peer {i}: expected seq 0");
+            }
+        }
+    }
+
+    #[test]
     fn test_vv_find_gaps_ignores_nodes_not_in_remote() {
         let mut local = VersionVector::new();
         local.update(NodeId(1), SequenceNumber(5));

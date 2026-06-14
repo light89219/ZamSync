@@ -130,4 +130,34 @@ mod tests {
         write_frame(&mut buf, &payload).unwrap();
         assert_eq!(buf[4], FLAG_ZSTD);
     }
+
+    #[test]
+    fn test_write_frame_rejects_payload_at_max_size() {
+        // Payload exactly at MAX_FRAME_SIZE must be rejected (the check is >=).
+        // write_frame checks length before any allocation or I/O, so this returns
+        // immediately even though we allocate a large Vec here.
+        let huge = vec![0u8; MAX_FRAME_SIZE as usize];
+        let mut buf = Vec::new();
+        let result = write_frame(&mut buf, &huge);
+        assert!(result.is_err(), "payload at MAX_FRAME_SIZE must be rejected");
+        assert!(buf.is_empty(), "no bytes must be written on rejection");
+    }
+
+    #[test]
+    fn test_try_consume_frame_rejects_oversized_length_field() {
+        use super::super::frame_buf::FrameBuffer;
+        use std::io::Cursor;
+
+        // Craft a wire frame whose 4-byte length field claims MAX_FRAME_SIZE + 1.
+        // The FrameBuffer must return an error, not try to allocate that much memory.
+        let oversized_len = (MAX_FRAME_SIZE as u64 + 1) as u32;
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&oversized_len.to_be_bytes()); // length field
+        wire.push(0x00); // flag byte (won't be reached)
+        // No actual payload bytes -- the error fires before the payload is read.
+
+        let mut fb = FrameBuffer::new();
+        let result = fb.try_read_frame(&mut Cursor::new(&wire));
+        assert!(result.is_err(), "oversized length field must be rejected");
+    }
 }
