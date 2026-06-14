@@ -54,6 +54,8 @@ impl Write for TlsStream {
 
 struct TlsPeerConn {
     stream: TlsStream,
+    /// Bytes accumulated across 50ms poll cycles (same fix as TcpTransport).
+    frame_buf: crate::protocol::FrameBuffer,
     /// One message buffered during accept (the initial Handshake).
     pending: Option<SyncMessage>,
 }
@@ -124,6 +126,7 @@ impl TlsTcpTransport {
             node_id.0,
             TlsPeerConn {
                 stream: tls,
+                frame_buf: crate::protocol::FrameBuffer::new(),
                 pending: Some(msg),
             },
         );
@@ -152,6 +155,7 @@ impl TlsTcpTransport {
             peer_id.0,
             TlsPeerConn {
                 stream: tls,
+                frame_buf: crate::protocol::FrameBuffer::new(),
                 pending: None,
             },
         );
@@ -180,14 +184,13 @@ impl Transport for TlsTcpTransport {
                 if let Some(msg) = peer.pending.take() {
                     return Ok(Some((NodeId(peer_id_raw), msg)));
                 }
-                match protocol::decode(&mut peer.stream) {
-                    Ok(msg) => return Ok(Some((NodeId(peer_id_raw), msg))),
-                    Err(ZamError::Io(e))
-                        if e.kind() == io::ErrorKind::WouldBlock
-                            || e.kind() == io::ErrorKind::TimedOut =>
-                    {
-                        continue;
+                match peer.frame_buf.try_read_frame(&mut peer.stream) {
+                    Ok(Some(bytes)) => {
+                        let msg = rkyv::from_bytes::<SyncMessage>(&bytes)
+                            .map_err(|e| ZamError::Serialization(format!("{}", e)))?;
+                        return Ok(Some((NodeId(peer_id_raw), msg)));
                     }
+                    Ok(None) => continue,
                     Err(e) => return Err(e),
                 }
             }
