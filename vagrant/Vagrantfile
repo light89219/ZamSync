@@ -1,0 +1,65 @@
+# ZamSync Hospital Network Simulation
+# Topology: 1 hub + N clinics on a private network
+#
+# Usage:
+#   CLINIC_COUNT=4 vagrant up        # default: 4 clinics
+#   vagrant up hub clinic-1          # bring up specific VMs only
+#
+# Network: 192.168.56.0/24
+#   hub      192.168.56.10
+#   clinic-1 192.168.56.11
+#   clinic-2 192.168.56.12
+#   ...
+
+CLINIC_COUNT = (ENV["CLINIC_COUNT"] || "4").to_i
+ZAMSYNC_VERSION = ENV["ZAMSYNC_VERSION"] || "latest"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.box_check_update = false
+
+  # Shared provisioner: install Python for Ansible
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update -qq
+    apt-get install -y -qq python3 python3-pip iproute2 curl jq
+  SHELL
+
+  # Hub node
+  config.vm.define "hub" do |hub|
+    hub.vm.hostname = "zamsync-hub"
+    hub.vm.network "private_network", ip: "192.168.56.10"
+    hub.vm.provider "virtualbox" do |vb|
+      vb.name   = "zamsync-hub"
+      vb.memory = 512
+      vb.cpus   = 1
+    end
+  end
+
+  # Clinic nodes
+  (1..CLINIC_COUNT).each do |i|
+    config.vm.define "clinic-#{i}" do |clinic|
+      clinic.vm.hostname = "zamsync-clinic-#{i}"
+      clinic.vm.network "private_network", ip: "192.168.56.#{10 + i}"
+      clinic.vm.provider "virtualbox" do |vb|
+        vb.name   = "zamsync-clinic-#{i}"
+        vb.memory = 512
+        vb.cpus   = 1
+      end
+    end
+  end
+
+  # Run Ansible provisioning after all VMs are up
+  # Trigger manually: vagrant provision --provision-with ansible
+  # or run: ansible-playbook -i ansible/inventory.ini ansible/playbooks/provision.yml
+  config.vm.define "hub" do |hub|
+    hub.vm.provision "ansible" do |ansible|
+      ansible.playbook       = "ansible/playbooks/provision.yml"
+      ansible.inventory_path = "ansible/inventory.ini"
+      ansible.limit          = "all"
+      ansible.extra_vars     = {
+        zamsync_version: ZAMSYNC_VERSION,
+        clinic_count: CLINIC_COUNT
+      }
+    end
+  end
+end

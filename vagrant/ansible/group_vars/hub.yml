@@ -1,0 +1,7 @@
+---
+zamsync_role: hub
+zamsync_data_dir: /var/lib/zamsync/hub
+# Hub uses OwnOnly policy to enforce clinic isolation
+zamsync_policy: all
+# Hub does NOT apply network degradation
+apply_netem: false

@@ -1,0 +1,45 @@
+---
+# Global configuration for all ZamSync nodes
+
+zamsync_version: "1.0.3"
+zamsync_install_dir: /usr/local/bin
+zamsync_data_dir: /var/lib/zamsync
+zamsync_user: zamsync
+zamsync_group: zamsync
+
+# Sync port (TCP)
+zamsync_sync_port: 9000
+
+# Hub address for clinic sync (set to hub IP on private network)
+hub_ip: "192.168.56.10"
+hub_sync_addr: "192.168.56.10:9000"
+
+# Number of patient events each clinic submits in the scenario
+scenario_events_per_clinic: 500
+
+# Scenario network profiles
+network_profiles:
+  bhutan_2g:
+    label: "Bhutan 2G/EDGE"
+    delay_ms: 600
+    delay_jitter_ms: 100
+    bandwidth_kbps: 30
+    loss_pct: "5%"
+    corrupt_pct: "0.1%"
+  satellite:
+    label: "Remote Satellite"
+    delay_ms: 1200
+    delay_jitter_ms: 200
+    bandwidth_kbps: 100
+    loss_pct: "2%"
+    corrupt_pct: "0.05%"
+  urban_3g:
+    label: "Urban 3G"
+    delay_ms: 80
+    delay_jitter_ms: 20
+    bandwidth_kbps: 1024
+    loss_pct: "0.1%"
+    corrupt_pct: "0%"
+
+# Active profile for this run (override with -e network_profile=satellite)
+active_network_profile: bhutan_2g

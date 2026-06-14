@@ -122,61 +122,77 @@
 - [x] **VersionVector with 200 peers**: `find_gaps()` correct for all entries at scale
 - [ ] **CLI tests**: each command executed as a real process against a real node (`cargo test --features integration`)
 
-## Phase 11: Compatibilité Bases de Données et Écosystème
+## Phase 11: Database Compatibility and Ecosystem
 
-### Projection Service (remplacement sécurisé du script shell)
+### Projection Service
 
-- [ ] `zamsync project <data-dir> --target postgres://...` — service de projection officiel; lit le WAL ZamSync et insère les events dans une base cible via requêtes paramétrées (zéro injection SQL)
-- [ ] Checkpoint persistant : reprend depuis le dernier `seq` projeté après redémarrage; aucun doublon en base cible
-- [ ] Batch configurable : `--batch-size 100` pour regrouper les inserts et réduire les round-trips réseau
-- [ ] Support bases de données :
-  - [ ] **PostgreSQL** — `INSERT ... ON CONFLICT DO NOTHING` sur `(origin_node, seq)`
-  - [ ] **MySQL / MariaDB** — `INSERT IGNORE INTO ...`
-  - [ ] **SQLite** — projection locale pour appareils embarqués sans PG
-  - [ ] **MongoDB** — upsert sur `{origin: node_id, seq: seq}`
-  - [ ] **ClickHouse** — append-only table pour analytics sur events de santé / IoT
-- [ ] Mode dry-run : `--dry-run` affiche les events qui seraient projetés sans toucher la base
+- [ ] `zamsync project <data-dir> --target postgres://...` -- official projection service; reads the ZamSync WAL and inserts events into a target database via parameterized queries (zero SQL injection)
+- [ ] Persistent checkpoint: resumes from the last projected `seq` after restart; no duplicates in target database
+- [ ] Configurable batch size: `--batch-size 100` to group inserts and reduce network round-trips
+- [ ] Database support:
+  - [ ] **PostgreSQL** -- `INSERT ... ON CONFLICT DO NOTHING` on `(origin_node, seq)`
+  - [ ] **MySQL / MariaDB** -- `INSERT IGNORE INTO ...`
+  - [ ] **SQLite** -- local projection for embedded devices without PG
+  - [ ] **MongoDB** -- upsert on `{origin: node_id, seq: seq}`
+  - [ ] **ClickHouse** -- append-only table for health/IoT event analytics
+- [ ] Dry-run mode: `--dry-run` prints events that would be projected without touching the database
 
-### Event Stream (push au lieu de polling)
+### Event Stream
 
-- [ ] `zamsync stream <data-dir>` — expose un endpoint SSE (`text/event-stream`) ou WebSocket que les services consommateurs écoutent en temps réel; élimine le besoin de poller `zamsync audit` en boucle
-- [ ] Filtre par `--node <id>` et `--since <seq>` sur le stream pour ne recevoir que les events pertinents
-- [ ] Permet aux frontends React/Vue de consommer les events directement via EventSource sans polling
+- [ ] `zamsync stream <data-dir>` -- exposes an SSE endpoint (`text/event-stream`) or WebSocket for real-time consumers; eliminates polling `zamsync audit` in a loop
+- [ ] Filter by `--node <id>` and `--since <seq>` on the stream
+- [ ] Enables React/Vue frontends to consume events directly via `EventSource` without polling
 
-### SDKs Clients
+### Client SDKs
 
-- [ ] **Python SDK** (`pip install zamsync`) — `ZamSyncClient.submit()`, `ZamSyncClient.stream()`, connexion au daemon local via socket Unix ou HTTP; remplace les appels shell
-- [ ] **Node.js / TypeScript SDK** (`npm install zamsync-client`) — idem, pour backends Express/NestJS et frontends Next.js
-- [ ] **REST API** embarquée (`zamsync serve --http 0.0.0.0:8080`) — `POST /submit`, `GET /events?since=<seq>`, `GET /health`, `GET /metrics`; permet l'intégration sans SDK depuis n'importe quel langage
+- [ ] **Python SDK** (`pip install zamsync`) -- `ZamSyncClient.submit()`, `ZamSyncClient.stream()`, connects via HTTP to the embedded REST server
+- [ ] **Node.js / TypeScript SDK** (`npm install zamsync-client`) -- same, for Express/NestJS backends and Next.js frontends
 
-### Intégration CI/CD
+### CI/CD Integration
 
-- [x] Release automatisée : `workflow_dispatch` avec saisie de version → bump `Cargo.toml` + commit + tag → `build-release.yml` déclenché
-- [x] Binaires multi-plateformes : x86_64-linux, aarch64-linux, armv7-linux, x86_64-windows -- compilés nativement ou via `cross`
-- [x] Image Docker multi-arch publiée sur GHCR : `latest`, `1.x`, `1.x.y` -- sans QEMU pour la compilation (binaires pré-construits via `Dockerfile.release`)
-- [x] GitHub Release avec checksums SHA-256 et notes de version automatiques
-- [x] Démos terminales animées (GIF) : quickstart, sécurité mTLS, chiffrement WAL, contrôle d'accès (`docs/demos/`)
-- [ ] Helm chart pour déploiement Kubernetes (hub en Deployment, nœuds en DaemonSet)
-- [ ] GitHub Actions réutilisable : `uses: zamsync/actions/deploy-hub@v1`
+- [x] Automated release: `workflow_dispatch` with version input → bump `Cargo.toml` + commit + tag → `build-release.yml` triggered
+- [x] Multi-platform binaries: x86_64-linux, aarch64-linux, armv7-linux, x86_64-windows
+- [x] Multi-arch Docker image on GHCR: `latest`, `1.x`, `1.x.y`
+- [x] GitHub Release with SHA-256 checksums and auto-generated release notes
+- [x] Animated terminal demos (GIF): quickstart, mTLS security, WAL encryption, access control (`docs/demos/`)
+- [ ] Helm chart for Kubernetes deployment (hub as Deployment, clinics as DaemonSet)
+- [ ] Reusable GitHub Actions: `uses: zamsync/actions/deploy-hub@v1`
 
-## Phase 12: REST API et Intégrations
+## Phase 12: REST API and Integrations
 
-- [ ] **REST API embarquée** (`zamsync serve --http 0.0.0.0:8080`) -- `POST /submit`, `GET /events?since=<seq>`, `GET /health`, `GET /metrics`; intégration depuis n'importe quel langage sans SDK
-- [ ] **Event Stream SSE** (`GET /events/stream`) -- push temps-réel vers frontends React/Vue via `EventSource`
+- [x] **Embedded REST API** (`zamsync serve --http 0.0.0.0:8080`) -- `POST /submit`, `GET /events?since=<seq>`, `GET /health`; integration from any language without an SDK
+- [x] **SSE Event Stream** (`GET /events/stream`) -- real-time push to React/Vue frontends via `EventSource`
 - [ ] **Python SDK** (`pip install zamsync`) -- `ZamSyncClient.submit()`, `ZamSyncClient.stream()`
 - [ ] **Node.js / TypeScript SDK** (`npm install zamsync-client`)
 
+## Phase 13: Field Simulation and Performance Evidence
+
+Objective: prove with reproducible metrics that ZamSync outperforms alternatives
+(IPFS, rsync) for offline-first sync on constrained hospital networks.
+
+- [x] **Vagrant topology**: 1 hub + N clinics (configurable via `CLINIC_COUNT`), Ubuntu 22.04 LTS, 512 MB RAM each (Raspberry Pi class)
+- [x] **tc netem network profiles**: Bhutan 2G (600ms + 30 kbps + 5% loss), satellite (1200ms + 100 kbps), urban 3G (80ms + 1 Mbps)
+- [x] **Ansible provisioning**: full workflow -- keygen on hub, sign clinic certs, systemd service, automated PKI rotation
+- [x] **Scenario playbook**: 6-phase automated test -- offline submission, network degradation, simultaneous sync from N clinics, convergence verification, metric collection
+- [x] **Self-contained HTML report**: Chart.js embedded -- sync duration per clinic, bandwidth (ZamSync vs IPFS estimated), memory footprint, per-event wire overhead
+- [x] **ZamSync vs IPFS comparison table**: mTLS, encryption at rest, access control, deterministic ordering, RAM footprint, binary size, ARM support
+- [ ] **Mid-sync cut test**: Ansible playbook that disables the hub mid-sync (simulates power cut), resumes, verifies zero data loss
+- [ ] **Multi-run aggregation**: run 3 scenarios back-to-back, aggregate stats into a single report (mean, p95 sync time)
+- [ ] **CI integration**: GitHub Actions workflow that runs the Vagrant simulation on a Linux runner and publishes the report as a GitHub Pages artifact
+
 ## First-Deployment Target
 
-ZamSync est un moteur de synchronisation générique. Le scénario de référence est le Bhutan ePIS (electronic patient information system), mais l'architecture est agnostique au domaine métier et applicable à tout cas offline-first sur réseau intermittent.
+ZamSync is a generic sync engine. The reference scenario is the Bhutan ePIS
+(electronic patient information system), but the architecture is domain-agnostic
+and applicable to any offline-first use case on intermittent networks.
 
-Cas d'usage validés :
-- Collecte de données terrain (santé rurale, agriculture, ONG)
-- Réplication de logs d'audit entre sites sans cloud central
-- Sync de capteurs IoT en connectivité dégradée
-- Event sourcing multi-site avec isolation par tenant (`--policy own`)
+Validated use cases:
+- Field data collection (rural health, agriculture, NGOs)
+- Audit log replication between sites without central cloud
+- IoT sensor sync under degraded connectivity
+- Multi-site event sourcing with tenant isolation (`--policy own`)
 
-Contraintes matérielles cibles :
-- Nodes : ARM64 / ARMv7 (Raspberry Pi class), 512 MB RAM minimum
-- Payload : événements JSON structurés, typiquement 1–10 KB
-- Latence de sync acceptable : de quelques secondes à plusieurs heures selon connectivité
+Target hardware constraints:
+- Nodes: ARM64 / ARMv7 (Raspberry Pi class), 512 MB RAM minimum
+- Payload: structured JSON events, typically 1-10 KB
+- Acceptable sync latency: seconds to hours depending on connectivity

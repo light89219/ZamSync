@@ -1,0 +1,1 @@
+# Simulation results\n\nRun the scenario playbook to populate this directory.\n\nansible-playbook -i ansible/inventory.ini ansible/playbooks/scenario.yml

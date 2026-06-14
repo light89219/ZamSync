@@ -86,6 +86,7 @@ The reference deployment is the **Bhutan ePIS** (electronic patient information 
 | **Observability** | Prometheus metrics, structured tracing, audit trail (JSON Lines) |
 | **Operations** | WAL compaction, key rotation, daemon mode, benchmarking |
 | **Efficiency** | Zstd level-3 compression on all frames, chunked batches (256 events/frame) |
+| **REST API** | Embedded HTTP server (`--http`) -- `POST /submit`, `GET /events`, `GET /events/stream` (SSE) |
 | **Platforms** | x86_64-linux, aarch64-linux, armv7-linux, x86_64-windows (static musl binaries) |
 
 ---
@@ -366,6 +367,45 @@ Hub sees all events.
 
 ---
 
+## REST API
+
+ZamSync embeds an HTTP server when `--http` is passed to `serve`. This lets any language integrate without a native SDK.
+
+```bash
+# Start hub with both TCP sync port and HTTP API
+zamsync serve ./hub 0.0.0.0:9000 --http 0.0.0.0:8080
+
+# Health check
+curl http://localhost:8080/health
+# {"status":"ok","node_id":"a3f2c1d8","events":42}
+
+# Submit an event via HTTP
+curl -X POST http://localhost:8080/submit \
+  -H 'Content-Type: application/json' \
+  -d '{"event_type": 1, "payload": {"patient": "P-001", "type": "admission"}}'
+# {"seq":43,"node_id":"a3f2c1d8"}
+
+# Fetch events since seq 40
+curl 'http://localhost:8080/events?since=40'
+# [{"seq":41,...}, {"seq":42,...}, {"seq":43,...}]
+
+# Server-Sent Events stream (real-time push, polls every 500ms)
+curl -N http://localhost:8080/events/stream
+# data: {"seq":44,"node_id":"a3f2c1d8","event_type":1,"payload":{...}}
+# data: {"seq":45,...}
+```
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | `GET` | Node status and event count |
+| `/submit` | `POST` | Append an event (JSON body: `event_type`, `payload`) |
+| `/events` | `GET` | Fetch events; `?since=<seq>` filters to newer events |
+| `/events/stream` | `GET` | SSE stream -- new events pushed as they arrive |
+
+The HTTP server runs in a dedicated OS thread and opens a fresh engine per request -- no shared mutable state, same pattern as the CLI.
+
+---
+
 ## Prometheus Metrics
 
 ```bash
@@ -486,6 +526,48 @@ docker compose -f tests/docker-compose.test.yml up --build --abort-on-container-
 ```
 
 See [tests/README.md](tests/README.md) for details.
+
+---
+
+## Hospital Network Simulation (Vagrant + Ansible)
+
+A full Vagrant environment that spins up a realistic multi-clinic deployment and
+benchmarks ZamSync under simulated 2G / satellite / 3G network conditions.
+Includes a self-contained HTML report comparing ZamSync against IPFS.
+
+```bash
+cd vagrant/
+CLINIC_COUNT=4 vagrant up
+
+# Provision: install ZamSync binary, generate PKI, start systemd services
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/provision.yml
+
+# Run the Bhutan 2G scenario: 4 clinics x 500 patient events, sync, verify
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/scenario.yml
+
+# Open the benchmark report with charts
+start results/report.html  # Windows
+open  results/report.html  # macOS
+```
+
+Network profiles:
+
+| Profile | Latency | Bandwidth | Packet loss |
+|---------|---------|-----------|-------------|
+| `bhutan_2g` (default) | 600ms ± 100ms | 30 kbps | 5% |
+| `satellite` | 1200ms ± 200ms | 100 kbps | 2% |
+| `urban_3g` | 80ms ± 20ms | 1 Mbps | 0.1% |
+
+```bash
+# Switch profile at runtime
+ansible-playbook ... -e active_network_profile=satellite -e events_per_clinic=2000
+```
+
+The report includes ZamSync vs IPFS comparison: memory footprint (~4 MB vs ~210 MB),
+per-event wire overhead (21 bytes vs 256+ bytes), mTLS, encryption at rest, access
+control, and deterministic ordering -- all missing from IPFS.
+
+See [vagrant/README.md](vagrant/README.md) for full documentation.
 
 ---
 

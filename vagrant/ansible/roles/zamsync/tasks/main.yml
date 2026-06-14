@@ -1,0 +1,69 @@
+---
+# Install ZamSync binary from GitHub Releases
+
+- name: Create zamsync system user
+  ansible.builtin.user:
+    name: "{{ zamsync_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ zamsync_data_dir }}"
+    create_home: false
+
+- name: Create data directory
+  ansible.builtin.file:
+    path: "{{ zamsync_data_dir }}"
+    state: directory
+    owner: "{{ zamsync_user }}"
+    group: "{{ zamsync_group }}"
+    mode: "0750"
+
+- name: Get latest ZamSync release tag
+  when: zamsync_version == "latest"
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/Etoile-Bleu/ZamSync/releases/latest
+    return_content: true
+  register: latest_release
+  failed_when: false
+
+- name: Set resolved version
+  ansible.builtin.set_fact:
+    resolved_version: >-
+      {{
+        (latest_release.json.tag_name | regex_replace('^v', ''))
+        if zamsync_version == 'latest'
+        else zamsync_version
+      }}
+
+- name: Check installed version
+  ansible.builtin.command: zamsync --version
+  register: installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Download ZamSync binary
+  when: installed_version.rc != 0 or resolved_version not in (installed_version.stdout | default(''))
+  ansible.builtin.get_url:
+    url: "https://github.com/Etoile-Bleu/ZamSync/releases/download/v{{ resolved_version }}/zamsync-x86_64-linux"
+    dest: "{{ zamsync_install_dir }}/zamsync"
+    mode: "0755"
+    owner: root
+    group: root
+  notify: Restart zamsync
+
+- name: Install systemd service
+  ansible.builtin.template:
+    src: zamsync-serve.service.j2
+    dest: /etc/systemd/system/zamsync-serve.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart zamsync
+
+- name: Enable and start zamsync service
+  ansible.builtin.systemd:
+    name: zamsync-serve
+    enabled: true
+    state: started
+    daemon_reload: true
