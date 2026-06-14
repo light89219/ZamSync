@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "zamsync"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "log",
  "metrics",
@@ -1914,7 +1914,7 @@ dependencies = [
 
 [[package]]
 name = "zamsync-core"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "bytecheck",
  "rkyv",
@@ -1925,7 +1925,7 @@ dependencies = [
 
 [[package]]
 name = "zamsync-network"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "byteorder",
  "log",
@@ -1942,7 +1942,7 @@ dependencies = [
 
 [[package]]
 name = "zamsync-storage"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "byteorder",
  "chacha20poly1305",
@@ -1960,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "zamsync-testing"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "zamsync-core",
  "zamsync-storage",
