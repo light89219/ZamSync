@@ -17,6 +17,9 @@
 
 ---
 
+<!-- demo.gif: render with `docker run --rm -v "${PWD}:/vhs" ghcr.io/charmbracelet/vhs demo.tape` -->
+<!-- ![ZamSync demo](demo.gif) -->
+
 ## 30-second Quick Start
 
 No Rust, no Cargo. One binary, zero dependencies.
