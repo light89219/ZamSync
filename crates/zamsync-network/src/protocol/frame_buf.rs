@@ -19,6 +19,12 @@ pub struct FrameBuffer {
     buf: Vec<u8>,
 }
 
+impl Default for FrameBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FrameBuffer {
     pub fn new() -> Self {
         Self { buf: Vec::new() }
@@ -32,9 +38,8 @@ impl FrameBuffer {
     ///
     /// Returns:
     /// * `Ok(Some(payload))` -- a complete, decompressed frame is ready.
-    /// * `Ok(None)`          -- not enough bytes yet; call again after the next
-    ///                          read opportunity.
-    /// * `Err(_)`            -- a real I/O or protocol error occurred.
+    /// * `Ok(None)` -- not enough bytes yet; call again after the next read opportunity.
+    /// * `Err(_)` -- a real I/O or protocol error occurred.
     pub fn try_read_frame(&mut self, stream: &mut impl Read) -> ZamResult<Option<Vec<u8>>> {
         // Fast path: if the buffer already holds a complete frame, return it
         // without touching the stream at all. This handles the case where a
