@@ -1,8 +1,8 @@
 <p align="center">
   <h1 align="center">ZamSync</h1>
-  <p align="center"><strong>Offline-first synchronization engine for intermittent-connectivity deployments</strong></p>
+  <p align="center"><strong>Resilient data replication for systems that cannot assume connectivity.</strong></p>
   <p align="center">
-    Deterministic WAL replication &bull; mTLS PKI &bull; WAL encryption at rest &bull; ARM64 / ARMv7 native
+    Works over 2G, satellite, or no internet for hours &bull; No dropped events. Ever.
   </p>
 </p>
 
@@ -20,55 +20,51 @@
 <!-- Regenerate: docker run --rm -v "${PWD}:/vhs" ghcr.io/charmbracelet/vhs docs/demos/quickstart.tape -->
 ![ZamSync demo](docs/demos/quickstart.gif)
 
-## 30-second Quick Start
+---
 
-No Rust, no Cargo. One binary, zero dependencies.
-
-**Linux / Raspberry Pi:**
-```bash
-curl -fsSL -o zamsync https://github.com/Etoile-Bleu/ZamSync/releases/latest/download/zamsync-linux-x86_64
-chmod +x zamsync && sudo mv zamsync /usr/local/bin/
-```
-
-**Docker:**
-```bash
-docker pull ghcr.io/etoile-bleu/zamsync:latest
-```
-
-**First sync between two nodes:**
+## Two nodes. Three commands.
 
 ```bash
-# Node A -- start listening
-zamsync serve ./node-a 0.0.0.0:7000
+# Node A: start listening
+zamsync serve ./a 0.0.0.0:7000
 
-# Node B (another terminal) -- write an event and sync to A
-zamsync submit ./node-b '{"patient": "P-001", "type": "visit"}'
-zamsync sync   ./node-b 127.0.0.1:7000 $(cat ./node-a/.node_id)
+# Node B: write an event and sync
+zamsync submit ./b '{"patient": "P-001", "type": "visit"}'
+zamsync sync   ./b 127.0.0.1:7000 $(cat ./a/.node_id)
 ```
 
 ```
-[node-b] connecting to 127.0.0.1:7000...
 [node-b] handshake ok  peer=a3f2c1d8
 [node-b] sent 1 event
 [node-b] sync complete in 12ms
 ```
 
-Node A now has the event. If the connection drops mid-transfer, just run `sync` again -- only missing events are retransmitted.
+Connection dropped mid-transfer? Run `sync` again. Only missing events are retransmitted.
+
+No Rust, no Cargo. One binary, zero runtime dependencies.
+
+```bash
+curl -fsSL -o zamsync \
+  https://github.com/Etoile-Bleu/ZamSync/releases/latest/download/zamsync-linux-x86_64
+chmod +x zamsync && sudo mv zamsync /usr/local/bin/
+```
 
 ---
 
-## What is ZamSync?
+## Why ZamSync exists
 
-ZamSync is a systems-level synchronization engine for environments where network connectivity is unreliable, intermittent, or extremely low-bandwidth -- think 2G links, satellite connections, or Raspberry Pi nodes in remote clinics.
+Built for environments where connectivity is a privilege, not a guarantee.
 
-It provides **deterministic, bidirectional event replication** between nodes, designed to work correctly through:
+District clinics in rural Bhutan sync patient records to a central hospital hub over 2G cellular -- 600ms latency, 30 kbps bandwidth, and frequent power outages. ZamSync was designed to work correctly through:
 
-- hours or days of complete disconnection
-- mid-transfer connection cuts
-- duplicate deliveries and partial writes
-- power loss during a sync session
+- **hours or days** of complete disconnection
+- **mid-transfer connection cuts** -- resume exactly where it left off
+- **power loss** during a sync session -- the WAL survives crashes
+- **duplicate deliveries** and partial writes -- idempotent by design
 
-The reference deployment is the **Bhutan ePIS** (electronic patient information system), where district clinics sync patient records to a central hospital hub over 2G cellular with 600ms latency and frequent blackouts.
+Single static binary. Runs on a Raspberry Pi 2. 512 MB RAM minimum.
+
+**Long-term vision:** enable adoption in rural public health systems such as Bhutan's clinic network, where offline-first synchronization is not an optimization -- it is a requirement.
 
 ---
 
@@ -474,6 +470,8 @@ When `--max-peers` is reached the hub accepts the TCP connection but blocks
 the session start until a slot frees -- clients queue rather than being
 rejected.
 
+---
+
 ## Prometheus Metrics
 
 ```bash
@@ -488,6 +486,108 @@ curl http://localhost:9090/metrics
 | `zamsync_events_received_total` | Counter | Events received from a peer |
 | `zamsync_sync_duration_seconds` | Summary | Full sync session duration (quantiles: p50, p90, p99) |
 | `zamsync_vv_drift` | Gauge | Version Vector gap vs peer |
+
+---
+
+## Hospital Network Simulation
+
+Multi-clinic network simulation using **Docker + Toxiproxy** -- no VMs, no Ansible,
+runs on any machine that has Docker and works in CI.
+
+```bash
+# 4 clinics x 500 events, Bhutan 2G profile (600ms latency, 30 kbps)
+docker compose -f tests/docker-compose.network.yml \
+  up --build --abort-on-container-exit
+
+# Report is written to tests/results/report.html
+start tests\results\report.html   # Windows
+open  tests/results/report.html   # Linux
+```
+
+Override profile and scale:
+
+```bash
+PROFILE=satellite EVENTS=2000 CLINIC_COUNT=8 \
+  docker compose -f tests/docker-compose.network.yml \
+  up --build --abort-on-container-exit
+```
+
+Network profiles (applied via Toxiproxy):
+
+| Profile | Latency | Bandwidth | Scenario |
+|---------|---------|-----------|----------|
+| `bhutan_2g` (default) | 600ms ± 100ms | 30 kbps | Rural clinic, 2G/EDGE |
+| `satellite` | 1200ms ± 200ms | 100 kbps | Very remote, VSAT |
+| `urban_3g` | 80ms ± 20ms | 1 Mbps | Urban 3G baseline |
+
+The simulation runs **two back-to-back scenarios** and compares them:
+
+| Scenario | `--max-peers` | Description |
+|----------|--------------|-------------|
+| Sequential | 1 | Clinics queue -- baseline |
+| Concurrent | 16 | Clinics sync in parallel (Phase 14) |
+
+The generated report includes:
+- Hero speedup widget (e.g. **4.3x** faster on Rural 2G/EDGE)
+- Sync wall time: Sequential vs Concurrent (horizontal bar chart)
+- Per-clinic sync duration comparison
+- Prometheus quantile distribution (p50 / p90 / p99) scraped live from each hub
+- ZamSync bytes transferred vs IPFS estimated overhead
+- 9-row feature comparison table (mTLS, encryption at rest, access control, ARM support ...)
+
+---
+
+## Embedding in a Rust Application
+
+```toml
+[dependencies]
+zamsync-storage = { git = "https://github.com/Etoile-Bleu/ZamSync.git" }
+zamsync-core    = { git = "https://github.com/Etoile-Bleu/ZamSync.git" }
+```
+
+```rust
+use zamsync_core::{ports::StateStore, Event, SequenceNumber, ZamResult};
+use zamsync_storage::ZamEngine;
+
+struct PatientIndex {
+    records: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl StateStore for PatientIndex {
+    fn apply_event(&mut self, _seq: SequenceNumber, event: &Event) -> ZamResult<()> {
+        if let Ok(record) = serde_json::from_slice(&event.payload) {
+            let id: String = record["id"].as_str().unwrap_or("").to_string();
+            self.records.insert(id, record);
+        }
+        Ok(())
+    }
+    fn last_applied_seq(&self) -> Option<SequenceNumber> { None }
+}
+
+fn main() -> zamsync_core::ZamResult<()> {
+    let index = PatientIndex { records: Default::default() };
+    let mut engine = ZamEngine::open_wal("./data", zamsync_core::NodeId(1), index)?;
+    engine.submit(1, br#"{"id": "P-001", "name": "Dorji"}"#.to_vec())?;
+    Ok(())
+}
+```
+
+---
+
+## Building
+
+```bash
+cargo build --release
+
+# ARM cross-compilation
+cross build --release --target aarch64-unknown-linux-musl
+cross build --release --target armv7-unknown-linux-musleabihf
+
+# Tests
+cargo test --workspace
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
 ---
 
@@ -540,124 +640,6 @@ services:
       --policy own
       --key-file /var/lib/zamsync/data.key
       --metrics 0.0.0.0:9090
-```
-
----
-
-## Embedding in a Rust Application
-
-```toml
-[dependencies]
-zamsync-storage = { git = "https://github.com/Etoile-Bleu/ZamSync.git" }
-zamsync-core    = { git = "https://github.com/Etoile-Bleu/ZamSync.git" }
-```
-
-```rust
-use zamsync_core::{ports::StateStore, Event, SequenceNumber, ZamResult};
-use zamsync_storage::ZamEngine;
-
-struct PatientIndex {
-    records: std::collections::HashMap<String, serde_json::Value>,
-}
-
-impl StateStore for PatientIndex {
-    fn apply_event(&mut self, _seq: SequenceNumber, event: &Event) -> ZamResult<()> {
-        if let Ok(record) = serde_json::from_slice(&event.payload) {
-            let id: String = record["id"].as_str().unwrap_or("").to_string();
-            self.records.insert(id, record);
-        }
-        Ok(())
-    }
-    fn last_applied_seq(&self) -> Option<SequenceNumber> { None }
-}
-
-fn main() -> zamsync_core::ZamResult<()> {
-    let index = PatientIndex { records: Default::default() };
-    let mut engine = ZamEngine::open_wal("./data", zamsync_core::NodeId(1), index)?;
-    engine.submit(1, br#"{"id": "P-001", "name": "Dorji"}"#.to_vec())?;
-    Ok(())
-}
-```
-
----
-
-## Network Resilience Test
-
-ZamSync ships with a Toxiproxy-based E2E test simulating real Bhutan 2G conditions:
-
-- 600ms latency + 100ms jitter + 30 KB/s bandwidth cap
-- Mid-sync connection cut after 2 seconds
-- 5,000 events verified with zero loss or duplication after reconnect
-
-```bash
-docker compose -f tests/docker-compose.test.yml up --build --abort-on-container-exit
-```
-
-See [tests/README.md](tests/README.md) for details.
-
----
-
-## Hospital Network Simulation
-
-Multi-clinic network simulation using **Docker + Toxiproxy** -- no VMs, no Ansible,
-runs on any machine that has Docker and works in CI.
-
-```bash
-# 4 clinics x 500 events, Bhutan 2G profile (600ms latency, 30 kbps)
-docker compose -f tests/docker-compose.network.yml \
-  up --build --abort-on-container-exit
-
-# Report is written to tests/results/report.html
-start tests\results\report.html   # Windows
-open  tests/results/report.html   # Linux
-```
-
-Override profile and scale:
-
-```bash
-PROFILE=satellite EVENTS=2000 CLINIC_COUNT=8 \
-  docker compose -f tests/docker-compose.network.yml \
-  up --build --abort-on-container-exit
-```
-
-Network profiles (applied via Toxiproxy):
-
-| Profile | Latency | Bandwidth | Scenario |
-|---------|---------|-----------|----------|
-| `bhutan_2g` (default) | 600ms ± 100ms | 30 kbps | Rural clinic, 2G/EDGE |
-| `satellite` | 1200ms ± 200ms | 100 kbps | Very remote, VSAT |
-| `urban_3g` | 80ms ± 20ms | 1 Mbps | Urban 3G baseline |
-
-The simulation runs **two back-to-back scenarios** and compares them:
-
-| Scenario | `--max-peers` | Description |
-|----------|--------------|-------------|
-| Sequential | 1 | Clinics queue -- baseline |
-| Concurrent | 16 | Clinics sync in parallel (Phase 14) |
-
-The generated report includes:
-- Hero speedup widget (e.g. **4.3x** faster on Rural 2G/EDGE)
-- Sync wall time: Sequential vs Concurrent (horizontal bar chart)
-- Per-clinic sync duration comparison
-- Prometheus quantile distribution (p50 / p90 / p99) scraped live from each hub
-- ZamSync bytes transferred vs IPFS estimated overhead
-- 9-row feature comparison table (mTLS, encryption at rest, access control, ARM support ...)
-
----
-
-## Building
-
-```bash
-cargo build --release
-
-# ARM cross-compilation
-cross build --release --target aarch64-unknown-linux-musl
-cross build --release --target armv7-unknown-linux-musleabihf
-
-# Tests
-cargo test --workspace
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ---
