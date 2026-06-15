@@ -192,7 +192,7 @@ of max. At 30 kbps / 600ms latency, 4 clinics took 14s instead of the expected ~
 - [x] **Connection limit flag**: `--max-peers 16` (default) caps concurrent sessions; stdlib counting semaphore, no external dependencies; works for both TCP and TLS modes
 - [x] **Backpressure**: when at `--max-peers` capacity, the accept loop blocks after accepting -- the connected client waits for a slot instead of being rejected; OS accept queue absorbs bursts
 - [x] **Correctness test**: 4-client concurrent hub test (`test_concurrent_hub_four_clients`) with a `Barrier` to synchronize all clients, verifies 20 events converge on hub with no deadlock or data loss
-- [ ] **Benchmark**: re-run Phase 13 Docker simulation after fix; expected total sync time ~3-4s for 4 simultaneous clinics at 30 kbps (was 14s sequential)
+- [x] **Benchmark**: A/B Docker simulation (hub-seq vs hub-con); 4 clinics, Rural 2G/EDGE (600ms / 30 kbps); sequential wall=13s, concurrent wall=3s; **4.3x speedup**; 2000/2000 events converged on both hubs; report in `tests/results/report.html`
 
 ## First-Deployment Target
 
