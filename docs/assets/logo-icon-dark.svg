@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 90" role="img" aria-label="ZamSync icon">
+  <!-- Left node: white/light on dark bg -->
+  <rect x="0" y="0" width="88" height="88" rx="4" fill="white"/>
+  <path d="M20 20 L68 20 L68 34 L38 56 L68 56 L68 70 L20 70 L20 56 L50 34 L20 34 Z" fill="#0F1B2D"/>
+
+  <!-- Dashed sync connector -->
+  <line x1="88" y1="44" x2="132" y2="44" stroke="white" stroke-width="3" stroke-dasharray="6,5" stroke-linecap="round"/>
+
+  <!-- Sync pulse arc -->
+  <path d="M 98 49 Q 110 63 122 49" stroke="#00C9A7" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Right node: teal -->
+  <rect x="132" y="6" width="80" height="76" rx="4" fill="#00C9A7"/>
+</svg>

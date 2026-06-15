@@ -1,9 +1,10 @@
 <p align="center">
-  <h1 align="center">ZamSync</h1>
-  <p align="center"><strong>Resilient data replication for systems that cannot assume connectivity.</strong></p>
-  <p align="center">
-    Works over 2G, satellite, or no internet for hours &bull; No dropped events. Ever.
-  </p>
+  <img src="docs/assets/logo-full-600.png" width="360" alt="ZamSync">
+</p>
+
+<p align="center">
+  <strong>Resilient data replication for systems that cannot assume connectivity.</strong><br>
+  Works over 2G, satellite, or no internet for hours &bull; No dropped events. Ever.
 </p>
 
 <p align="center">
