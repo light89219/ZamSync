@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/platforms-linux%20%7C%20arm64%20%7C%20armv7%20%7C%20windows-lightgrey?style=flat-square" alt="Platforms">
   <img src="https://img.shields.io/badge/docker-ghcr.io-2496ED?style=flat-square&logo=docker" alt="Docker">
   <a href="https://github.com/sponsors/Etoile-Bleu"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat-square&logo=github-sponsors" alt="Sponsor"></a>
+  <a href="https://dev.to/etoile_bleu/-i-built-a-sync-engine-for-clinics-that-run-on-2g-and-lose-power-mid-transfer-here-is-why-and-18od"><img src="https://img.shields.io/badge/dev.to-read%20the%20article-0A0A0A?style=flat-square&logo=devdotto" alt="Read the article on dev.to"></a>
 </p>
 
 ---
@@ -67,6 +68,8 @@ District clinics in rural Bhutan sync patient records to a central hospital hub 
 Single static binary. Runs on a Raspberry Pi 2. 512 MB RAM minimum.
 
 **Long-term vision:** enable adoption in rural public health systems such as Bhutan's clinic network, where offline-first synchronization is not an optimization -- it is a requirement.
+
+> Want the full story behind the design decisions? [Read the deep-dive article on dev.to.](https://dev.to/etoile_bleu/-i-built-a-sync-engine-for-clinics-that-run-on-2g-and-lose-power-mid-transfer-here-is-why-and-18od)
 
 ---
 
