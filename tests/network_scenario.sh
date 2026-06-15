@@ -182,9 +182,10 @@ run_scenario() {
     SYNC_WALL_S=$WALL_TOTAL
   fi
 
-  # Detect serving mode: sync_wall << sum means sessions overlapped
+  # Serving mode comes from the scenario design, not heuristics:
+  # seq hub runs with --max-peers 1 (sequential), con hub with --max-peers 16 (concurrent).
   local SERVING_MODE
-  if [ "${SUM_SYNC:-0}" -gt 0 ] && [ "$(( SYNC_WALL_S * 100 / SUM_SYNC ))" -lt 70 ]; then
+  if [ "$MODE" = "con" ]; then
     SERVING_MODE="concurrent"
   else
     SERVING_MODE="sequential"
@@ -192,12 +193,14 @@ run_scenario() {
 
   # Hub metrics
   step "[$MODE] Collecting hub metrics"
-  local HUB_WAL CLINIC1_WAL TOTAL_EXPECTED HUB_EVENTS
+  local HUB_WAL CLINIC_WAL_BEFORE TOTAL_EXPECTED HUB_EVENTS
   HUB_WAL=$(stat -c%s "$HUB_DATA/events.wal" 2>/dev/null || echo 0)
-  CLINIC1_WAL=$(stat -c%s "$WORK/clinic-1/events.wal" 2>/dev/null || echo 0)
+  # Use pre-sync WAL size (stored as bytes_sent in clinic JSON) so we always
+  # normalize by exactly EVENTS events worth of bytes, regardless of sync order.
+  CLINIC_WAL_BEFORE=$(jq -r '.bytes_sent // 0' "$MODE_RESULTS/clinic-1.json" 2>/dev/null || echo 0)
   TOTAL_EXPECTED=$(( CLINIC_COUNT * EVENTS ))
-  if [ "$CLINIC1_WAL" -gt 0 ] && [ "$HUB_WAL" -gt 0 ]; then
-    HUB_EVENTS=$(( HUB_WAL * EVENTS / CLINIC1_WAL ))
+  if [ "${CLINIC_WAL_BEFORE:-0}" -gt 0 ] && [ "$HUB_WAL" -gt 0 ]; then
+    HUB_EVENTS=$(( HUB_WAL * EVENTS / CLINIC_WAL_BEFORE ))
   else
     HUB_EVENTS=0
   fi

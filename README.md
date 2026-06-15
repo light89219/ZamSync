@@ -436,7 +436,7 @@ curl http://localhost:9090/metrics
 | `zamsync_events_submitted_total` | Counter | Events appended to local WAL |
 | `zamsync_events_sent_total` | Counter | Events sent to a peer |
 | `zamsync_events_received_total` | Counter | Events received from a peer |
-| `zamsync_sync_duration_seconds` | Histogram | Full sync session duration |
+| `zamsync_sync_duration_seconds` | Summary | Full sync session duration (quantiles: p50, p90, p99) |
 | `zamsync_vv_drift` | Gauge | Version Vector gap vs peer |
 
 ---
@@ -578,12 +578,20 @@ Network profiles (applied via Toxiproxy):
 | `satellite` | 1200ms ± 200ms | 100 kbps | Very remote, VSAT |
 | `urban_3g` | 80ms ± 20ms | 1 Mbps | Urban 3G baseline |
 
+The simulation runs **two back-to-back scenarios** and compares them:
+
+| Scenario | `--max-peers` | Description |
+|----------|--------------|-------------|
+| Sequential | 1 | Clinics queue -- baseline |
+| Concurrent | 16 | Clinics sync in parallel (Phase 14) |
+
 The generated report includes:
-- Sync duration per clinic (bar chart)
-- ZamSync bytes transferred vs IPFS estimated overhead (same event count)
-- Memory footprint: ZamSync ~4 MB vs IPFS daemon ~210 MB
-- Per-event wire overhead: ZamSync 21 bytes vs IPFS 256+ bytes
-- 12-row feature comparison table (mTLS, encryption at rest, access control, ARM support ...)
+- Hero speedup widget (e.g. **4.3x** faster on Rural 2G/EDGE)
+- Sync wall time: Sequential vs Concurrent (horizontal bar chart)
+- Per-clinic sync duration comparison
+- Prometheus quantile distribution (p50 / p90 / p99) scraped live from each hub
+- ZamSync bytes transferred vs IPFS estimated overhead
+- 9-row feature comparison table (mTLS, encryption at rest, access control, ARM support ...)
 
 ---
 
