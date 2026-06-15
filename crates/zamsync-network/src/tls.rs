@@ -328,8 +328,7 @@ mod tests {
         let node_key = rcgen::KeyPair::generate().expect("node key");
         let mut node_params =
             rcgen::CertificateParams::new(vec!["zamsync.local".to_string()]).expect("node params");
-        node_params.not_before =
-            time::OffsetDateTime::from_unix_timestamp(0).expect("epoch start");
+        node_params.not_before = time::OffsetDateTime::from_unix_timestamp(0).expect("epoch start");
         node_params.not_after =
             time::OffsetDateTime::from_unix_timestamp(86400).expect("epoch + 1 day");
         let expired_cert = node_params
@@ -347,12 +346,13 @@ mod tests {
             .expect("parse expired cert DER");
 
         let mut root_store = rustls::RootCertStore::empty();
-        root_store.add(ca_der[0].clone()).expect("add CA to root store");
+        root_store
+            .add(ca_der[0].clone())
+            .expect("add CA to root store");
 
-        let verifier =
-            rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
-                .build()
-                .expect("build verifier");
+        let verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
+            .build()
+            .expect("build verifier");
 
         // Verify against current wall-clock time: the cert expired in 1970 so it must fail.
         let now = rustls::pki_types::UnixTime::now();

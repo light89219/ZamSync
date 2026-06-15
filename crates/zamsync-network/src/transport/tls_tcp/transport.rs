@@ -144,7 +144,8 @@ impl TlsTcpTransport {
         };
 
         tls.set_read_timeout(Some(Duration::from_millis(50)))?;
-        self.peers.insert(node_id.0, TlsPeerConn::new(tls, Some(msg)));
+        self.peers
+            .insert(node_id.0, TlsPeerConn::new(tls, Some(msg)));
         info!(peer = node_id.0, %addr, "TLS peer accepted");
         Ok(node_id)
     }

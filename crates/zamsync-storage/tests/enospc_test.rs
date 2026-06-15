@@ -25,8 +25,7 @@ impl EventStore for FailAfterN {
 
     fn append(&mut self, event: &Event) -> ZamResult<SequenceNumber> {
         if self.inner.events().len() >= self.max {
-            return Err(ZamError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(ZamError::Io(std::io::Error::other(
                 "no space left on device",
             )));
         }
@@ -67,8 +66,7 @@ fn test_submit_enospc_does_not_corrupt_state() {
 
     let event_store = FailAfterN::new(BEFORE_FULL);
     let peer_store = InMemoryPeerStore::new(node_id);
-    let mut engine =
-        ZamEngine::new(node_id, event_store, peer_store, Counter::default()).unwrap();
+    let mut engine = ZamEngine::new(node_id, event_store, peer_store, Counter::default()).unwrap();
 
     // Fill the store to capacity
     for i in 0..BEFORE_FULL {
@@ -108,7 +106,11 @@ fn test_submit_enospc_does_not_corrupt_state() {
     let mut seqs: Vec<u64> = events.iter().map(|e| e.seq.0).collect();
     seqs.sort_unstable();
     seqs.dedup();
-    assert_eq!(seqs.len(), BEFORE_FULL, "no duplicate sequences after ENOSPC");
+    assert_eq!(
+        seqs.len(),
+        BEFORE_FULL,
+        "no duplicate sequences after ENOSPC"
+    );
 
     // Submit after the failure must still fail (store is still full)
     assert!(

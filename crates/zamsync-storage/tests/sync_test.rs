@@ -174,7 +174,11 @@ fn test_apply_replicated_idempotent() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     let b_events: Vec<Event> = engine_b.scan_events()?.collect::<ZamResult<_>>()?;
-    assert_eq!(b_events.len(), 2, "repeated apply_replicated must be idempotent");
+    assert_eq!(
+        b_events.len(),
+        2,
+        "repeated apply_replicated must be idempotent"
+    );
     assert_eq!(b_events[0].payload, b"patient-P001");
     assert_eq!(b_events[1].payload, b"patient-P002");
 
@@ -209,18 +213,27 @@ fn test_event_batch_before_handshake_does_not_panic() -> Result<(), Box<dyn std:
             events: vec![early_event],
         },
     )?;
-    assert!(responses.is_empty(), "EventBatch must return no response messages");
+    assert!(
+        responses.is_empty(),
+        "EventBatch must return no response messages"
+    );
 
     // The event is applied to the WAL -- state is consistent.
     let events: Vec<Event> = engine.scan_events()?.collect::<ZamResult<_>>()?;
-    assert_eq!(events.len(), 1, "event must be stored even without a prior Handshake");
+    assert_eq!(
+        events.len(),
+        1,
+        "event must be stored even without a prior Handshake"
+    );
     assert_eq!(events[0].payload, b"early-payload");
 
     // A subsequent Handshake still works correctly.
     let handshake = engine.prepare_handshake();
     let mut engine_b = make_engine(NodeId(3))?;
     let responses = engine_b.handle_sync_message(NodeId(1), handshake)?;
-    assert!(responses.iter().any(|m| matches!(m, SyncMessage::SyncComplete)));
+    assert!(responses
+        .iter()
+        .any(|m| matches!(m, SyncMessage::SyncComplete)));
 
     Ok(())
 }

@@ -95,7 +95,15 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             policy,
             max_peers,
         );
-        tls_loop(node_id, &dir, enc_key, schema, policy, max_peers, &mut transport);
+        tls_loop(
+            node_id,
+            &dir,
+            enc_key,
+            schema,
+            policy,
+            max_peers,
+            &mut transport,
+        );
     } else {
         let mut transport = TcpTransport::bind(bind_addr)?;
         println!(
@@ -105,7 +113,15 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             policy,
             max_peers,
         );
-        tcp_loop(node_id, &dir, enc_key, schema, policy, max_peers, &mut transport);
+        tcp_loop(
+            node_id,
+            &dir,
+            enc_key,
+            schema,
+            policy,
+            max_peers,
+            &mut transport,
+        );
     }
     Ok(())
 }

@@ -56,7 +56,6 @@ impl Transport for TcpPeerTransport {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::transport::TcpTransport;
     use std::sync::{Arc, Barrier};
     use std::thread;
@@ -90,8 +89,7 @@ mod tests {
         let hub_id = NodeId(1000);
 
         {
-            let mut eng =
-                ZamEngine::open_wal(hub_dir.path(), hub_id, Counter::default()).unwrap();
+            let mut eng = ZamEngine::open_wal(hub_dir.path(), hub_id, Counter::default()).unwrap();
             eng.sync().unwrap();
         }
 
@@ -109,9 +107,10 @@ mod tests {
                 let peer_id = pt.peer_id();
                 let path = hub_path.clone();
                 let h = thread::spawn(move || {
-                    let mut eng =
-                        ZamEngine::open_wal(&path, hub_id, Counter::default()).unwrap();
-                    SyncSession::new(&mut eng, &mut pt).serve_one(peer_id).unwrap();
+                    let mut eng = ZamEngine::open_wal(&path, hub_id, Counter::default()).unwrap();
+                    SyncSession::new(&mut eng, &mut pt)
+                        .serve_one(peer_id)
+                        .unwrap();
                     eng.sync().unwrap();
                 });
                 handles.push(h);
@@ -133,7 +132,8 @@ mod tests {
                 let mut eng =
                     ZamEngine::open_wal(dir.path(), clinic_id, Counter::default()).unwrap();
                 for j in 0..EVENTS_PER_CLINIC {
-                    eng.submit(1, format!("clinic-{i}-evt-{j}").into_bytes()).unwrap();
+                    eng.submit(1, format!("clinic-{i}-evt-{j}").into_bytes())
+                        .unwrap();
                 }
                 eng.sync().unwrap();
 
@@ -141,7 +141,9 @@ mod tests {
 
                 let mut transport = TcpTransport::bind("127.0.0.1:0").unwrap();
                 transport.connect(NodeId(1000), &addr).unwrap();
-                SyncSession::new(&mut eng, &mut transport).sync(NodeId(1000)).unwrap();
+                SyncSession::new(&mut eng, &mut transport)
+                    .sync(NodeId(1000))
+                    .unwrap();
             });
             clinic_handles.push(h);
         }
