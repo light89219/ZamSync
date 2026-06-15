@@ -39,7 +39,7 @@ GitHub routes the report to the maintainer only. No other users can see it.
 
 If you prefer email or if the GitHub flow does not work for you:
 
-**tarto6351@gmail.com**
+**matheo.delbarre@epitech.eu**
 
 Please use the subject line `[ZamSync] Security vulnerability report` and
 include as much detail as possible (see template below).
