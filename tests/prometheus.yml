@@ -3,7 +3,12 @@ global:
   evaluation_interval: 2s
 
 scrape_configs:
-  - job_name: 'zamsync_hub'
+  - job_name: 'zamsync_hub_seq'
     static_configs:
-      - targets: ['hub:9090']
+      - targets: ['hub-seq:9090']
+    metrics_path: '/metrics'
+
+  - job_name: 'zamsync_hub_con'
+    static_configs:
+      - targets: ['hub-con:9090']
     metrics_path: '/metrics'
