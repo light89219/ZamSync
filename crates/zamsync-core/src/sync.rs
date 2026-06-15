@@ -78,7 +78,11 @@ mod tests {
         assert_eq!(vv.get(NodeId(1)), SequenceNumber(5));
         // Lower seq must not overwrite a higher one.
         vv.update(NodeId(1), SequenceNumber(3));
-        assert_eq!(vv.get(NodeId(1)), SequenceNumber(5), "VV must never decrease");
+        assert_eq!(
+            vv.get(NodeId(1)),
+            SequenceNumber(5),
+            "VV must never decrease"
+        );
         // Same seq is idempotent.
         vv.update(NodeId(1), SequenceNumber(5));
         assert_eq!(vv.get(NodeId(1)), SequenceNumber(5));
@@ -100,9 +104,16 @@ mod tests {
         remote.update(NodeId(1), SequenceNumber(10));
         remote.update(NodeId(2), SequenceNumber(5));
 
-        let gaps: HashMap<u32, SequenceNumber> =
-            local.find_gaps(&remote).into_iter().map(|(n, s)| (n.0, s)).collect();
-        assert_eq!(gaps[&1], SequenceNumber::ZERO, "unknown node: start from seq 0");
+        let gaps: HashMap<u32, SequenceNumber> = local
+            .find_gaps(&remote)
+            .into_iter()
+            .map(|(n, s)| (n.0, s))
+            .collect();
+        assert_eq!(
+            gaps[&1],
+            SequenceNumber::ZERO,
+            "unknown node: start from seq 0"
+        );
         assert_eq!(gaps[&2], SequenceNumber::ZERO);
     }
 
@@ -115,8 +126,11 @@ mod tests {
         remote.update(NodeId(1), SequenceNumber(10));
         remote.update(NodeId(2), SequenceNumber(3));
 
-        let gaps: HashMap<u32, SequenceNumber> =
-            local.find_gaps(&remote).into_iter().map(|(n, s)| (n.0, s)).collect();
+        let gaps: HashMap<u32, SequenceNumber> = local
+            .find_gaps(&remote)
+            .into_iter()
+            .map(|(n, s)| (n.0, s))
+            .collect();
         // local has node 1 up to seq 5, remote has 10 → need seq 6 (local.next())
         assert_eq!(gaps[&1], SequenceNumber(6));
         // node 2 is unknown to local → need from seq 0
@@ -187,10 +201,18 @@ mod tests {
         for i in 0..PEER_COUNT {
             if i < 100 {
                 // local has seq 5, remote has 10 → need seq 6
-                assert_eq!(gap_map[&i], SequenceNumber(6), "peer {i}: expected next seq 6");
+                assert_eq!(
+                    gap_map[&i],
+                    SequenceNumber(6),
+                    "peer {i}: expected next seq 6"
+                );
             } else {
                 // unknown to local → need from seq 0
-                assert_eq!(gap_map[&i], SequenceNumber::ZERO, "peer {i}: expected seq 0");
+                assert_eq!(
+                    gap_map[&i],
+                    SequenceNumber::ZERO,
+                    "peer {i}: expected seq 0"
+                );
             }
         }
     }

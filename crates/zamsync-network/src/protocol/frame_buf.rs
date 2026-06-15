@@ -1,7 +1,7 @@
 use super::frame::MAX_FRAME_SIZE;
 use std::io::{ErrorKind, Read};
-use zstd;
 use zamsync_core::{ZamError, ZamResult};
+use zstd;
 
 /// Per-connection receive buffer.
 ///

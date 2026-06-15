@@ -114,12 +114,27 @@ fn test_three_node_split_brain_convergence() -> Result<(), Box<dyn std::error::E
     assert_eq!(count_c, 6, "C must have all 6 events after full mesh sync");
 
     // Determinism: sorted event streams must be identical on all three nodes.
-    let sorted_a: Vec<Vec<u8>> = engine_a.sorted_scan()?.map(|r| r.unwrap().payload).collect();
-    let sorted_b: Vec<Vec<u8>> = engine_b.sorted_scan()?.map(|r| r.unwrap().payload).collect();
-    let sorted_c: Vec<Vec<u8>> = engine_c.sorted_scan()?.map(|r| r.unwrap().payload).collect();
+    let sorted_a: Vec<Vec<u8>> = engine_a
+        .sorted_scan()?
+        .map(|r| r.unwrap().payload)
+        .collect();
+    let sorted_b: Vec<Vec<u8>> = engine_b
+        .sorted_scan()?
+        .map(|r| r.unwrap().payload)
+        .collect();
+    let sorted_c: Vec<Vec<u8>> = engine_c
+        .sorted_scan()?
+        .map(|r| r.unwrap().payload)
+        .collect();
 
-    assert_eq!(sorted_a, sorted_b, "A and B must converge to identical sorted streams");
-    assert_eq!(sorted_b, sorted_c, "B and C must converge to identical sorted streams");
+    assert_eq!(
+        sorted_a, sorted_b,
+        "A and B must converge to identical sorted streams"
+    );
+    assert_eq!(
+        sorted_b, sorted_c,
+        "B and C must converge to identical sorted streams"
+    );
 
     // VVs must agree on every node's highest seq.
     let vv_a = engine_a.replication_state().local_vv.clone();
@@ -129,8 +144,16 @@ fn test_three_node_split_brain_convergence() -> Result<(), Box<dyn std::error::E
         let seq_a = vv_a.get(node_id);
         let seq_b = vv_b.get(node_id);
         let seq_c = vv_c.get(node_id);
-        assert_eq!(seq_a, seq_b, "VV for node {} must agree: A={:?} B={:?}", node_id.0, seq_a, seq_b);
-        assert_eq!(seq_b, seq_c, "VV for node {} must agree: B={:?} C={:?}", node_id.0, seq_b, seq_c);
+        assert_eq!(
+            seq_a, seq_b,
+            "VV for node {} must agree: A={:?} B={:?}",
+            node_id.0, seq_a, seq_b
+        );
+        assert_eq!(
+            seq_b, seq_c,
+            "VV for node {} must agree: B={:?} C={:?}",
+            node_id.0, seq_b, seq_c
+        );
     }
 
     Ok(())

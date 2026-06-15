@@ -38,8 +38,7 @@ fn test_wal_rekey_all_records_readable_with_new_key() -> ZamResult<()> {
         assert_eq!(records.len(), 5, "old key must read all records");
 
         let start_seq = records.first().map(|r| r.seq).unwrap_or_default();
-        let mut writer =
-            WalWriter::open_encrypted(&tmp_path, start_seq, Arc::clone(&new_key))?;
+        let mut writer = WalWriter::open_encrypted(&tmp_path, start_seq, Arc::clone(&new_key))?;
         for r in &records {
             writer.append_at_seq(r.seq, &r.payload)?;
         }
@@ -54,7 +53,10 @@ fn test_wal_rekey_all_records_readable_with_new_key() -> ZamResult<()> {
         let records: Vec<_> = scanner.scan().collect::<ZamResult<_>>()?;
         assert_eq!(records.len(), 5, "new key must read all re-keyed records");
         for (record, expected) in records.iter().zip(payloads.iter()) {
-            assert_eq!(&record.payload, expected, "payload must survive rekey intact");
+            assert_eq!(
+                &record.payload, expected,
+                "payload must survive rekey intact"
+            );
         }
         assert_eq!(records[0].seq, SequenceNumber(0));
         assert_eq!(records[4].seq, SequenceNumber(4));
@@ -112,8 +114,7 @@ fn test_wal_rekey_preserves_seq_numbers() -> ZamResult<()> {
 
     // Write records with non-contiguous seq numbers (e.g. after a compaction).
     {
-        let mut w =
-            WalWriter::open_encrypted(&wal_path, SequenceNumber(10), Arc::clone(&old_key))?;
+        let mut w = WalWriter::open_encrypted(&wal_path, SequenceNumber(10), Arc::clone(&old_key))?;
         w.append_at_seq(SequenceNumber(10), b"r10")?;
         w.append_at_seq(SequenceNumber(20), b"r20")?;
         w.append_at_seq(SequenceNumber(30), b"r30")?;

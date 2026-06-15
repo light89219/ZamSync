@@ -55,6 +55,7 @@ macOS is not a supported target. It may work but is not tested in CI.
 
 ## PR guidelines
 
+- **CI must pass.** Every PR runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test --workspace` on Linux. Run them locally before pushing to avoid round-trips.
 - **One concern per PR.** A bug fix and a refactor go in separate PRs.
 - **Include a test** for any new behavior. CLI tests live in `tests/cli_integration.rs` (run with `--features integration`).
 - **No new runtime dependencies** unless strictly necessary. ZamSync compiles to a single static binary with zero system dependencies -- keep it that way.

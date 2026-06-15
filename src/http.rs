@@ -152,8 +152,16 @@ fn base64_encode(data: &[u8]) -> String {
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(CHARS[(n >> 18) & 63] as char);
         out.push(CHARS[(n >> 12) & 63] as char);
-        out.push(if chunk.len() > 1 { CHARS[(n >> 6) & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { CHARS[n & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            CHARS[(n >> 6) & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            CHARS[n & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -193,8 +201,7 @@ async fn submit(
     State(s): State<Arc<HttpState>>,
     Json(body): Json<SubmitRequest>,
 ) -> Result<Json<SubmitResponse>, AppError> {
-    let payload_bytes = serde_json::to_vec(&body.payload)
-        .map_err(|e| AppError(e.to_string()))?;
+    let payload_bytes = serde_json::to_vec(&body.payload).map_err(|e| AppError(e.to_string()))?;
     let event_type = body.event_type;
     let node_id = s.node_id;
 
@@ -229,9 +236,8 @@ async fn events(
     let evts = tokio::task::spawn_blocking({
         let s = s.clone();
         move || -> Result<Vec<EventJson>, String> {
-            let engine =
-                open_engine(&s.data_dir, s.node_id, s.enc_key(), PayloadSchema::None)
-                    .map_err(|e| e.to_string())?;
+            let engine = open_engine(&s.data_dir, s.node_id, s.enc_key(), PayloadSchema::None)
+                .map_err(|e| e.to_string())?;
             let evts = engine
                 .scan_events()
                 .map_err(|e| e.to_string())?
@@ -265,8 +271,7 @@ async fn events_stream(
             let current = last_seq;
             let evts: Vec<EventJson> = tokio::task::spawn_blocking(move || {
                 let engine =
-                    open_engine(&s.data_dir, s.node_id, s.enc_key(), PayloadSchema::None)
-                        .ok()?;
+                    open_engine(&s.data_dir, s.node_id, s.enc_key(), PayloadSchema::None).ok()?;
                 let evts: Vec<EventJson> = engine
                     .scan_events()
                     .ok()?

@@ -77,7 +77,10 @@ impl TcpTransport {
         let node_id = match &msg {
             SyncMessage::Handshake { node_id, .. } => *node_id,
             other => {
-                warn!(?other, "expected Handshake as first message, closing connection");
+                warn!(
+                    ?other,
+                    "expected Handshake as first message, closing connection"
+                );
                 return Err(ZamError::Protocol(
                     "first message from peer must be a Handshake".into(),
                 ));
@@ -85,7 +88,8 @@ impl TcpTransport {
         };
 
         stream.set_read_timeout(Some(Duration::from_millis(50)))?;
-        self.peers.insert(node_id.0, PeerConn::new(stream, Some(msg)));
+        self.peers
+            .insert(node_id.0, PeerConn::new(stream, Some(msg)));
         info!(peer = node_id.0, %addr, "accepted peer via Handshake");
         Ok(node_id)
     }
@@ -234,7 +238,11 @@ mod tests {
 
         let b_count = b_thread.join().unwrap();
 
-        assert_eq!(eng_a.state().count, 5, "A should have all 5 events after sync");
+        assert_eq!(
+            eng_a.state().count,
+            5,
+            "A should have all 5 events after sync"
+        );
         assert_eq!(b_count, 5, "B should have all 5 events after sync");
         assert_eq!(stats.events_sent, 3, "A sent its 3 events to B");
         assert_eq!(stats.events_received, 2, "A received B's 2 events");

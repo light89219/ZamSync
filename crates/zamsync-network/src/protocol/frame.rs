@@ -139,7 +139,10 @@ mod tests {
         let huge = vec![0u8; MAX_FRAME_SIZE as usize];
         let mut buf = Vec::new();
         let result = write_frame(&mut buf, &huge);
-        assert!(result.is_err(), "payload at MAX_FRAME_SIZE must be rejected");
+        assert!(
+            result.is_err(),
+            "payload at MAX_FRAME_SIZE must be rejected"
+        );
         assert!(buf.is_empty(), "no bytes must be written on rejection");
     }
 
@@ -154,7 +157,7 @@ mod tests {
         let mut wire = Vec::new();
         wire.extend_from_slice(&oversized_len.to_be_bytes()); // length field
         wire.push(0x00); // flag byte (won't be reached)
-        // No actual payload bytes -- the error fires before the payload is read.
+                         // No actual payload bytes -- the error fires before the payload is read.
 
         let mut fb = FrameBuffer::new();
         let result = fb.try_read_frame(&mut Cursor::new(&wire));

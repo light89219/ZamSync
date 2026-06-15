@@ -152,7 +152,10 @@ mod tests {
         let mut h = Hlc::new(1000, 0);
         h.tick(50);
         assert_eq!(h.physical, 1000, "physical must not decrease");
-        assert_eq!(h.logical, 1, "logical increments when wall is behind physical");
+        assert_eq!(
+            h.logical, 1,
+            "logical increments when wall is behind physical"
+        );
     }
 
     #[test]
@@ -212,7 +215,10 @@ mod tests {
         let mut h = Hlc::default();
         let remote = Hlc::new(999, 42);
         h.sync(1, &remote);
-        assert!(h > remote, "local HLC must be strictly ahead of remote after sync");
+        assert!(
+            h > remote,
+            "local HLC must be strictly ahead of remote after sync"
+        );
     }
 
     #[test]

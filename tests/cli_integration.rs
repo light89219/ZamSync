@@ -23,7 +23,11 @@ fn bin() -> std::path::PathBuf {
             }
             p
         });
-    assert!(path.exists(), "zamsync binary not found at {}", path.display());
+    assert!(
+        path.exists(),
+        "zamsync binary not found at {}",
+        path.display()
+    );
     path
 }
 
@@ -81,10 +85,7 @@ fn test_submit_increments_event_count() {
         );
     }
 
-    let out = Command::new(&bin)
-        .args(["info", dir_s])
-        .output()
-        .unwrap();
+    let out = Command::new(&bin).args(["info", dir_s]).output().unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("events   : 3"),

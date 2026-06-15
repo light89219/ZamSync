@@ -80,7 +80,11 @@ fn test_concurrent_writes_no_lost_events() {
         original_len,
         "duplicate sequence numbers found -- concurrent WAL writes corrupted"
     );
-    assert_eq!(seqs.len(), TOTAL, "sequence count must equal submitted count");
+    assert_eq!(
+        seqs.len(),
+        TOTAL,
+        "sequence count must equal submitted count"
+    );
 }
 
 /// A node compacts while a new peer connects immediately after.
