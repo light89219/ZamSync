@@ -1,10 +1,37 @@
-use crate::util::{data_dir, flag_value, load_encryption_key, node_id_from_dir, open_engine};
+use crate::util::{data_dir, flag_value, load_encryption_key, node_id_from_dir};
+use zamsync_core::{ports::StateStore, Event, SequenceNumber, ZamResult};
+use zamsync_storage::ZamEngine;
+
+// Collects count + oldest/newest HLC timestamps in a single WAL scan.
+#[derive(Default)]
+struct InfoState {
+    count: usize,
+    oldest_ms: Option<u64>,
+    newest_ms: Option<u64>,
+}
+
+impl StateStore for InfoState {
+    fn apply_event(&mut self, _seq: SequenceNumber, event: &Event) -> ZamResult<()> {
+        self.count += 1;
+        let phys = event.hlc.physical;
+        self.oldest_ms = Some(self.oldest_ms.map_or(phys, |o| o.min(phys)));
+        self.newest_ms = Some(self.newest_ms.map_or(phys, |n| n.max(phys)));
+        Ok(())
+    }
+    fn last_applied_seq(&self) -> Option<SequenceNumber> {
+        None
+    }
+}
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let dir = data_dir(args, 2)?;
     let node_id = node_id_from_dir(&dir);
     let enc_key = load_encryption_key(args)?;
-    let engine = open_engine(&dir, node_id, enc_key, zamsync_storage::PayloadSchema::None)?;
+
+    let engine = match enc_key {
+        Some(key) => ZamEngine::open_wal_encrypted(&dir, node_id, InfoState::default(), key)?,
+        None => ZamEngine::open_wal(&dir, node_id, InfoState::default())?,
+    };
 
     println!("node_id  : {}", node_id.0);
     println!("data_dir : {}", dir.display());
@@ -19,22 +46,12 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Retention section
-    let wal_path = dir.join("events.wal");
-    let wal_kb = std::fs::metadata(&wal_path)
+    let wal_kb = std::fs::metadata(dir.join("events.wal"))
         .map(|m| m.len() / 1024)
         .unwrap_or(0);
     println!("wal size : {} KB", wal_kb);
 
-    let mut oldest_ms: Option<u64> = None;
-    let mut newest_ms: Option<u64> = None;
-    for res in engine.scan_events()? {
-        let event = res?;
-        let phys = event.hlc.physical;
-        oldest_ms = Some(oldest_ms.map_or(phys, |o: u64| o.min(phys)));
-        newest_ms = Some(newest_ms.map_or(phys, |n: u64| n.max(phys)));
-    }
-    match (oldest_ms, newest_ms) {
+    match (engine.state().oldest_ms, engine.state().newest_ms) {
         (Some(o), Some(n)) => {
             println!("oldest   : {}", format_date(o));
             println!("newest   : {}", format_date(n));
@@ -45,7 +62,6 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Show configured retention if --retain was passed (informational only)
     if let Some(retain) = flag_value(args, "--retain") {
         println!("retain   : {}", retain);
     }
@@ -53,10 +69,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Convert Unix milliseconds to `YYYY-MM-DD` (UTC).
+/// Convert Unix milliseconds to `YYYY-MM-DD` (UTC) via reverse Julian Day Number.
 fn format_date(ms: u64) -> String {
     let days = (ms / 86_400_000) as i64;
-    // Gregorian calendar from Julian Day Number
     let jdn = days + 2_440_588;
     let a = jdn + 32044;
     let b = (4 * a + 3) / 146097;
