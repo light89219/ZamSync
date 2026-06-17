@@ -244,10 +244,10 @@ quota and block all other network use. Bandwidth budgeting caps transfer per
 session and per day, allowing clinics to sync incrementally across multiple
 scheduled windows.
 
-- [ ] **Per-session cap**: `zamsync sync --max-bytes 2M` stops sending after 2 MB of WAL frames have been transmitted in the current session; resumes from the correct VV offset on the next invocation (no re-transmission, no data loss)
+- [x] **Per-session cap**: `zamsync sync --max-bytes 2M` stops sending after 2 MB of WAL frames have been transmitted in the current session; resumes from the correct VV offset on the next invocation (no re-transmission, no data loss)
+- [x] **Prometheus metrics**: `zamsync_bytes_sent_total` and `zamsync_budget_exhausted_total` (labeled by peer) added to the existing metrics endpoint; wire-accurate byte count returned from `Transport::send()` after compression
 - [ ] **Daily budget enforcement**: `zamsync serve --daily-budget 20M` tracks bytes transferred per calendar day per peer; once a peer reaches its budget the hub finishes the current batch then closes with `SyncComplete` so the clinic receives partial progress
 - [ ] **Budget accounting persistence**: byte counters are written to `budget.bin` in the data directory; survive hub restarts; reset at local midnight
-- [ ] **Prometheus metrics**: `zamsync_bytes_sent_total`, `zamsync_bytes_received_total`, `zamsync_budget_remaining_bytes` added to the existing metrics endpoint; enables alerting when a clinic is consistently hitting its budget
 - [ ] **Dry-run estimation**: `zamsync sync --max-bytes 0 --dry-run` reports how many bytes a full sync would transfer without sending anything; clinic operator can plan the sync window size accordingly
 
 ## Phase 19: Event Retention and Automatic Compaction
