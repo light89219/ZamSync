@@ -299,7 +299,15 @@
 
   // ---- Live event table ----
 
+  // Tracks the highest seq seen so reconnects resume from the right position.
+  let lastKnownSeq = 0;
+  // Secondary dedup guard for any edge case where the server sends a duplicate.
+  const seenSeqs = new Set();
+
   function pushEvent(e) {
+    if (seenSeqs.has(e.seq)) return;
+    seenSeqs.add(e.seq);
+    if (e.seq > lastKnownSeq) lastKnownSeq = e.seq;
     liveEvents.unshift(e);
     if (liveEvents.length > MAX_ROWS) liveEvents.pop();
     renderTable();
@@ -354,7 +362,8 @@
     clearTimeout(sseTimer);
     setConnecting();
 
-    es = new EventSource('/events/stream');
+    // Resume from the last seen seq so reconnects never replay already-shown events.
+    es = new EventSource('/events/stream?since=' + lastKnownSeq);
 
     es.onopen = () => {
       sseBackoff = 1000;
