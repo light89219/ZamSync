@@ -1,0 +1,11 @@
+{
+  "projectName": "ZamSync",
+  "projectOwner": "Etoile-Bleu",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": ["CONTRIBUTORS.md"],
+  "imageSize": 100,
+  "commit": true,
+  "contributors": [],
+  "contributorsPerLine": 7
+}
