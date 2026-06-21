@@ -174,6 +174,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+        init_schema(&pool).await.unwrap();
         pool
     }
 
@@ -206,8 +207,8 @@ mod tests {
             .unwrap();
         rt.block_on(async {
             let pool = setup_pool(&url).await;
+            // setup_pool already called init_schema once; call again to verify idempotency
             init_schema(&pool).await.unwrap();
-            init_schema(&pool).await.unwrap(); // idempotent
 
             let row: (i64,) =
                 sqlx::query_as("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'zamsync_events'")
@@ -228,7 +229,6 @@ mod tests {
             .unwrap();
         rt.block_on(async {
             let pool = setup_pool(&url).await;
-            init_schema(&pool).await.unwrap();
 
             let events = sample_events();
 
