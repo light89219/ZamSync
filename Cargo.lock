@@ -3347,6 +3347,7 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
+ "url",
  "windows-sys 0.61.2",
  "zamsync-core",
  "zamsync-network",

@@ -1,5 +1,6 @@
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use url::Url;
 use zamsync_core::Event;
 
 pub fn run(
@@ -13,11 +14,51 @@ pub fn run(
     rt.block_on(run_async(url, events, batch_size))
 }
 
+async fn ensure_database(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let parsed = Url::parse(url)?;
+    let db_name = parsed
+        .path()
+        .trim_start_matches('/')
+        .to_string();
+    if db_name.is_empty() {
+        return Err("PostgreSQL URL must include a database name".into());
+    }
+
+    let mut maintenance_url = parsed.clone();
+    maintenance_url.set_path("/postgres");
+    let maint_pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(maintenance_url.as_str())
+        .await?;
+
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)",
+    )
+    .bind(&db_name)
+    .fetch_one(&maint_pool)
+    .await?;
+
+    if !exists.0 {
+        // CREATE DATABASE cannot run inside a transaction
+        let stmt = format!(
+            "CREATE DATABASE \"{}\"",
+            db_name.replace('"', "\"\"")
+        );
+        sqlx::query(&stmt).execute(&maint_pool).await?;
+        eprintln!("created database \"{db_name}\"");
+    }
+
+    maint_pool.close().await;
+    Ok(())
+}
+
 async fn run_async(
     url: &str,
     events: impl Iterator<Item = Result<Event, Box<dyn std::error::Error>>>,
     batch_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    ensure_database(url).await?;
+
     let pool = PgPoolOptions::new()
         .max_connections(4)
         .connect(url)
