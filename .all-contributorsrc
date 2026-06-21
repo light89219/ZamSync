@@ -1,0 +1,33 @@
+{
+  "projectName": "ZamSync",
+  "projectOwner": "Etoile-Bleu",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": ["CONTRIBUTORS.md"],
+  "imageSize": 100,
+  "commit": true,
+  "contributors": [
+    {
+      "login": "Etoile-Bleu",
+      "name": "Etoile-Bleu",
+      "avatar_url": "https://avatars.githubusercontent.com/u/56513031?v=4",
+      "profile": "https://github.com/Etoile-Bleu",
+      "contributions": ["code"]
+    },
+    {
+      "login": "KairosOps",
+      "name": "KairosOps",
+      "avatar_url": "https://avatars.githubusercontent.com/u/186839917?v=4",
+      "profile": "https://github.com/KairosOps",
+      "contributions": ["code", "bug"]
+    },
+    {
+      "login": "tyleruploads",
+      "name": "tyleruploads",
+      "avatar_url": "https://avatars.githubusercontent.com/u/242097429?v=4",
+      "profile": "https://github.com/tyleruploads",
+      "contributions": ["legal"]
+    }
+  ],
+  "contributorsPerLine": 7
+}
