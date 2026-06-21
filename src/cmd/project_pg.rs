@@ -16,10 +16,7 @@ pub fn run(
 
 async fn ensure_database(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let parsed = Url::parse(url)?;
-    let db_name = parsed
-        .path()
-        .trim_start_matches('/')
-        .to_string();
+    let db_name = parsed.path().trim_start_matches('/').to_string();
     if db_name.is_empty() {
         return Err("PostgreSQL URL must include a database name".into());
     }
@@ -31,19 +28,15 @@ async fn ensure_database(url: &str) -> Result<(), Box<dyn std::error::Error>> {
         .connect(maintenance_url.as_str())
         .await?;
 
-    let exists: (bool,) = sqlx::query_as(
-        "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)",
-    )
-    .bind(&db_name)
-    .fetch_one(&maint_pool)
-    .await?;
+    let exists: (bool,) =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)")
+            .bind(&db_name)
+            .fetch_one(&maint_pool)
+            .await?;
 
     if !exists.0 {
         // CREATE DATABASE cannot run inside a transaction
-        let stmt = format!(
-            "CREATE DATABASE \"{}\"",
-            db_name.replace('"', "\"\"")
-        );
+        let stmt = format!("CREATE DATABASE \"{}\"", db_name.replace('"', "\"\""));
         sqlx::query(&stmt).execute(&maint_pool).await?;
         eprintln!("created database \"{db_name}\"");
     }
@@ -59,10 +52,7 @@ async fn run_async(
 ) -> Result<(), Box<dyn std::error::Error>> {
     ensure_database(url).await?;
 
-    let pool = PgPoolOptions::new()
-        .max_connections(4)
-        .connect(url)
-        .await?;
+    let pool = PgPoolOptions::new().max_connections(4).connect(url).await?;
 
     init_schema(&pool).await?;
 

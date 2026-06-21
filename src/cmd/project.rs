@@ -15,7 +15,8 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(100);
 
     let target = flag_value(args, "--target");
-    let is_pg = matches!(target, Some(u) if u.starts_with("postgres://") || u.starts_with("postgresql://"));
+    let is_pg =
+        matches!(target, Some(u) if u.starts_with("postgres://") || u.starts_with("postgresql://"));
 
     if is_pg && dry_run {
         eprintln!("[dry-run] would project to {}", target.unwrap());
@@ -50,7 +51,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         let url = target.unwrap();
         println!("projecting to {url}");
         let scan = engine.sorted_scan()?;
-        let iter = scan.into_iter().map(|r| r.map_err(|e| -> Box<dyn std::error::Error> { e.into() }));
+        let iter = scan
+            .into_iter()
+            .map(|r| r.map_err(|e| -> Box<dyn std::error::Error> { e.into() }));
         return project_pg::run(url, iter, batch_size);
     }
 
